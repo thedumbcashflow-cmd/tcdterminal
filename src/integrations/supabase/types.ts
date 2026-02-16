@@ -14,16 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      market_intel: {
+        Row: {
+          asset_symbol: string
+          created_at: string
+          flow_type: string | null
+          id: string
+          intel_type: string | null
+          is_premium: boolean
+          liquidation_level: number | null
+          value_usd: number | null
+          wallet_label: string | null
+          whale_flow_score: number | null
+        }
+        Insert: {
+          asset_symbol: string
+          created_at?: string
+          flow_type?: string | null
+          id?: string
+          intel_type?: string | null
+          is_premium?: boolean
+          liquidation_level?: number | null
+          value_usd?: number | null
+          wallet_label?: string | null
+          whale_flow_score?: number | null
+        }
+        Update: {
+          asset_symbol?: string
+          created_at?: string
+          flow_type?: string | null
+          id?: string
+          intel_type?: string | null
+          is_premium?: boolean
+          liquidation_level?: number | null
+          value_usd?: number | null
+          wallet_label?: string | null
+          whale_flow_score?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id: string
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_subscription_tier: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["subscription_tier"]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      subscription_tier: "free" | "pro" | "whale"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +244,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      subscription_tier: ["free", "pro", "whale"],
+    },
   },
 } as const
