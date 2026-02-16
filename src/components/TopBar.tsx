@@ -1,8 +1,10 @@
-import { Search } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 const TopBar = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, signOut } = useAuth();
   const now = new Date();
 
   return (
@@ -33,6 +35,20 @@ const TopBar = () => {
           <span className="h-1.5 w-1.5 rounded-full bg-terminal-green animate-pulse" />
           <span className="text-muted-foreground">LIVE</span>
         </div>
+        {user && (
+          <div className="flex items-center gap-2 border-l border-border pl-3">
+            <span className="font-data text-muted-foreground truncate max-w-[120px]">
+              {user.user_metadata?.full_name || user.email?.split("@")[0]}
+            </span>
+            <button
+              onClick={signOut}
+              className="text-muted-foreground transition-colors hover:text-primary"
+              title="Sign out"
+            >
+              <LogOut className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

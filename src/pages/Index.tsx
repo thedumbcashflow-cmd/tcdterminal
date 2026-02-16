@@ -33,6 +33,21 @@ const MetricCard = ({
   </div>
 );
 
+const whaleRows = [
+  { time: "14:32:01", asset: "SOL", type: "BUY", value: "$2.4M", label: "Smart Money" },
+  { time: "14:31:45", asset: "JUP", type: "SELL", value: "$890K", label: "Whale #412" },
+  { time: "14:31:22", asset: "SOL", type: "BUY", value: "$5.1M", label: "Institution" },
+  { time: "14:30:58", asset: "BONK", type: "SELL", value: "$340K", label: "Degen Fund" },
+  { time: "14:30:41", asset: "RAY", type: "BUY", value: "$1.2M", label: "Smart Money" },
+  { time: "14:30:15", asset: "JTO", type: "BUY", value: "$670K", label: "Whale #87" },
+  { time: "14:29:59", asset: "SOL", type: "SELL", value: "$3.8M", label: "Profit Taking" },
+  { time: "14:29:33", asset: "PYTH", type: "BUY", value: "$450K", label: "Smart Money" },
+  { time: "14:29:10", asset: "SOL", type: "BUY", value: "$1.9M", label: "Whale #203" },
+  { time: "14:28:47", asset: "WIF", type: "SELL", value: "$720K", label: "Degen Fund" },
+  { time: "14:28:22", asset: "RNDR", type: "BUY", value: "$3.2M", label: "Institution" },
+  { time: "14:27:58", asset: "SOL", type: "BUY", value: "$6.7M", label: "Smart Money" },
+];
+
 const Index = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -42,7 +57,7 @@ const Index = () => {
         <main className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-auto p-3">
             {/* Metric Row */}
-            <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mb-3">
               <MetricCard
                 label="SOL Price"
                 value="$178.42"
@@ -70,8 +85,8 @@ const Index = () => {
             </div>
 
             {/* Bento Grid */}
-            <div className="grid grid-cols-3 gap-2">
-              <TerminalCard title="Whale Flow Monitor" className="col-span-2 row-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
+              <TerminalCard title="Whale Flow Monitor" className="md:col-span-2 lg:col-span-2 lg:row-span-2">
                 <div className="space-y-0">
                   {/* Table Header */}
                   <div className="grid grid-cols-5 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -81,17 +96,7 @@ const Index = () => {
                     <span>Value</span>
                     <span>Label</span>
                   </div>
-                  {/* Mock Rows */}
-                  {[
-                    { time: "14:32:01", asset: "SOL", type: "BUY", value: "$2.4M", label: "Smart Money" },
-                    { time: "14:31:45", asset: "JUP", type: "SELL", value: "$890K", label: "Whale #412" },
-                    { time: "14:31:22", asset: "SOL", type: "BUY", value: "$5.1M", label: "Institution" },
-                    { time: "14:30:58", asset: "BONK", type: "SELL", value: "$340K", label: "Degen Fund" },
-                    { time: "14:30:41", asset: "RAY", type: "BUY", value: "$1.2M", label: "Smart Money" },
-                    { time: "14:30:15", asset: "JTO", type: "BUY", value: "$670K", label: "Whale #87" },
-                    { time: "14:29:59", asset: "SOL", type: "SELL", value: "$3.8M", label: "Profit Taking" },
-                    { time: "14:29:33", asset: "PYTH", type: "BUY", value: "$450K", label: "Smart Money" },
-                  ].map((row, i) => (
+                  {whaleRows.map((row, i) => (
                     <div
                       key={i}
                       className="grid grid-cols-5 border-b border-border/30 px-2 py-1 font-data text-xs hover:bg-secondary/30 transition-colors"
@@ -111,16 +116,24 @@ const Index = () => {
               <TerminalCard title="Network Health">
                 <div className="space-y-3">
                   {[
-                    { label: "Slot Height", value: "284,392,741" },
-                    { label: "Epoch", value: "612" },
-                    { label: "Active Validators", value: "1,847" },
-                    { label: "Stake Rate", value: "67.3%" },
+                    { label: "Slot Height", value: "284,392,741", pct: 95 },
+                    { label: "Epoch", value: "612", pct: 62 },
+                    { label: "Active Validators", value: "1,847", pct: 85 },
+                    { label: "Stake Rate", value: "67.3%", pct: 67 },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {item.label}
-                      </span>
-                      <span className="font-data text-sm font-bold text-foreground">{item.value}</span>
+                    <div key={i}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {item.label}
+                        </span>
+                        <span className="font-data text-sm font-bold text-foreground">{item.value}</span>
+                      </div>
+                      <div className="mt-1 h-0.5 w-full bg-secondary">
+                        <div
+                          className="h-full bg-accent transition-all"
+                          style={{ width: `${item.pct}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -153,8 +166,8 @@ const Index = () => {
                 </div>
               </TerminalCard>
 
-              <TerminalCard title="DePIN Tracker" className="col-span-2">
-                <div className="grid grid-cols-3 gap-2">
+              <TerminalCard title="DePIN Tracker" className="md:col-span-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   {[
                     { name: "Helium (HNT)", tvl: "$1.2B", change: 4.2 },
                     { name: "Hivemapper (HONEY)", tvl: "$89M", change: -1.8 },
