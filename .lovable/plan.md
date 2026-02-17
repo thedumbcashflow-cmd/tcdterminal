@@ -1,127 +1,146 @@
 
 
-# Phase 2 + 3: Authentication, Database Schema & Dashboard Polish
+# Phase 4 + AI Analysis: Data Widgets, AI Edge Function & Auth Testing
 
 ## Overview
-Set up the full backend infrastructure (authentication, profiles, user roles, market intel table) with strict Row Level Security, then build a terminal-themed auth flow and refine the dashboard layout.
+Build the core data visualization layer with real database queries, create an AI-powered market analysis edge function, and wire everything together with the terminal aesthetic.
 
 ---
 
-## Database Migration (Single SQL Migration)
+## 1. AI Market Analysis Edge Function
 
-Create all tables, enums, functions, triggers, and RLS policies in one migration:
+**File: `supabase/functions/analyze-market/index.ts`**
 
-### Tables & Types
-1. **`app_role` enum** -- values: `admin`, `moderator`, `user`
-2. **`subscription_tier` enum** -- values: `free`, `pro`, `whale`
-3. **`profiles` table** -- linked to `auth.users(id)` with `ON DELETE CASCADE`
-   - `id` (uuid, PK, references auth.users)
-   - `username` (text, nullable)
-   - `avatar_url` (text, nullable)
-   - `subscription_tier` (subscription_tier, default `free`)
-   - `created_at`, `updated_at` (timestamptz)
-4. **`user_roles` table** -- separate table for roles (security best practice)
-   - `id` (uuid, PK)
-   - `user_id` (uuid, references auth.users, NOT NULL)
-   - `role` (app_role, NOT NULL)
-   - unique constraint on (user_id, role)
-5. **`market_intel` table** -- the core data table
-   - `id` (uuid, PK)
-   - `asset_symbol` (text, NOT NULL)
-   - `flow_type` (text) -- BUY/SELL
-   - `value_usd` (numeric)
-   - `wallet_label` (text)
-   - `liquidation_level` (numeric)
-   - `whale_flow_score` (numeric)
-   - `intel_type` (text)
-   - `is_premium` (boolean, default false)
-   - `created_at` (timestamptz)
+- Accepts POST with optional `asset_symbol` filter
+- Queries `market_intel` table using service role key for full data access
+- Sends whale flow data to Lovable AI Gateway (`google/gemini-3-flash-preview`) with a system prompt: "You are an institutional-grade Solana market analyst. Summarize whale flow patterns, identify accumulation/distribution trends, and flag notable wallet activity."
+- Returns streaming SSE response for real-time token rendering
+- Handles 429/402 rate limit errors gracefully
+- Requires auth token (validates user session) but uses service role for DB read
 
-### Security Definer Function
-- `has_role(uuid, app_role)` -- checks user_roles without recursive RLS
-
-### Database Trigger
-- Auto-create a `profiles` row with `subscription_tier = 'free'` when a new user signs up via `auth.users`
-
-### RLS Policies
-
-**profiles table:**
-- Users can read their own profile
-- Users can update their own profile (username, avatar_url only)
-
-**user_roles table:**
-- RLS enabled, no public policies (only accessible via `has_role()` security definer)
-
-**market_intel table (the critical tier-gating):**
-- `SELECT` for authenticated users: rows where `is_premium = false`
-- `SELECT` for pro/whale users: all rows (checked via a `get_subscription_tier()` security definer function that reads the user's profile)
-- Combined into a single policy: `is_premium = false OR get_subscription_tier(auth.uid()) IN ('pro', 'whale')`
-- `INSERT/UPDATE/DELETE` restricted to admins via `has_role()`
-
-### Realtime
-- Enable realtime on `market_intel` for live table updates
+**Config update: `supabase/config.toml`**
+```toml
+[functions.analyze-market]
+verify_jwt = false
+```
 
 ---
 
-## Authentication UI
+## 2. Whale Flow Table (Real DB Data)
 
-### New Files
-1. **`src/pages/Auth.tsx`** -- Terminal-themed login/signup page
-   - Email + password sign-in and sign-up forms
-   - Google OAuth via `lovable.auth.signInWithOAuth("google")`
-   - Navy/Amber aesthetic: sharp borders, monospace inputs, no rounded corners
-   - Toggle between "SIGN IN" and "CREATE ACCOUNT" modes
-   - Error/success toast messages
-   - Redirects to dashboard on successful auth
+**New file: `src/components/WhaleFlowTable.tsx`**
 
-2. **`src/hooks/useAuth.ts`** -- Auth state hook
-   - Wraps `supabase.auth.onAuthStateChange` and `getSession`
-   - Provides `user`, `session`, `loading`, `signOut` 
-   - Used by layout components to show/hide auth-gated content
-
-3. **`src/components/AuthGuard.tsx`** -- Route protection wrapper
-   - If not authenticated, redirect to `/auth`
-   - If loading, show terminal-style loading skeleton
-
-### Modified Files
-4. **`src/App.tsx`** -- Add `/auth` route, wrap dashboard in `AuthGuard`
-5. **`src/components/TopBar.tsx`** -- Add user indicator (username or email) and sign-out button in top-right
-6. **`src/components/TerminalSidebar.tsx`** -- Show subscription tier badge (FREE/PRO) below the logo
+- Fetches from `market_intel` table via Supabase client (RLS auto-filters by tier)
+- Subscribes to Supabase Realtime channel for live row insertions
+- Columns: Time, Asset, Type (BUY/SELL), Value, Label, Score
+- Conditional row coloring: green tint for BUY, red tint for SELL
+- Compact 28px rows, `font-data text-xs`
+- Falls back to mock data if no DB rows exist yet
+- Includes an "AI Analysis" button in the TerminalCard header that triggers the edge function and displays the streaming summary in a collapsible panel below the table
 
 ---
 
-## Dashboard Layout Polish
+## 3. Liquidation Heatmap (Recharts)
 
-### Changes to `src/pages/Index.tsx`
-- Make metric row responsive: `grid-cols-2 md:grid-cols-4`
-- Make bento grid responsive: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`
-- Add more mock rows to the Whale Flow table (12 rows instead of 8)
-- Add a mini sparkline visual (CSS-only bar chart) inside the Network Health widget
-- Tighten spacing: reduce gap from `gap-2` to `gap-1.5` in the bento grid for higher density
-- Add "PRO" lock overlay on the Liquidation Zones and Data Room sidebar items (already partially done with the lock icon)
+**New file: `src/components/LiquidationHeatmap.tsx`**
+
+- Uses Recharts `BarChart` with custom gradient bars
+- X-axis: price levels, Y-axis: liquidation volume in USD
+- Color gradient from Terminal Blue (low volume) to Amber (high volume)
+- Custom dark-themed tooltip matching the terminal aesthetic
+- Data sourced from `market_intel` rows where `liquidation_level IS NOT NULL`
+- **Pro gating**: For free-tier users, render a blurred overlay with "TERMINAL ACCESS RESTRICTED" and an upgrade CTA button
+- Uses the `useAuth` hook + profile query to determine tier
+
+---
+
+## 4. Live Price Ticker (CoinGecko API)
+
+**New file: `supabase/functions/fetch-prices/index.ts`**
+
+- Edge function that calls CoinGecko free API (`/api/v3/simple/price`)
+- Fetches SOL, BTC, ETH, JUP, BONK, RAY with USD prices and 24h change
+- Returns JSON array of ticker items
+- No auth required (public endpoint)
+
+**Config update:**
+```toml
+[functions.fetch-prices]
+verify_jwt = false
+```
+
+**Updated: `src/components/LiveTicker.tsx`**
+- Calls `fetch-prices` edge function every 30 seconds
+- Falls back to mock data on error
+- Flash animation: green pulse on price increase, red on decrease, amber at rest
+- Keeps the existing scrolling marquee animation
+
+---
+
+## 5. Dashboard Integration
+
+**Updated: `src/pages/Index.tsx`**
+- Replace mock whale flow table with `WhaleFlowTable` component
+- Replace static liquidation bars with `LiquidationHeatmap` component
+- Keep metric cards as-is (will be wired to real APIs in a future phase)
+- Add "AI ANALYSIS" button in the Whale Flow card header
+
+---
+
+## 6. Supporting Hooks & Utilities
+
+**New file: `src/hooks/useSubscriptionTier.ts`**
+- Queries the user's profile for `subscription_tier`
+- Returns `{ tier, loading, isPro }` for easy gating checks
+- Used by LiquidationHeatmap and other pro-gated components
+
+**New file: `src/hooks/useMarketIntel.ts`**
+- Fetches `market_intel` data with Supabase client
+- Sets up Realtime subscription for live updates
+- Returns `{ data, loading, error }`
+
+---
+
+## 7. Auth Flow Testing Checklist
+
+After implementation, we will manually verify:
+- Sign up with email at `/auth` -- confirm "Check your email" toast appears
+- Attempt sign in before verification -- confirm auth error
+- Verify email via link -- confirm redirect works
+- Sign in with verified account -- confirm dashboard loads
+- Confirm FREE badge visible in sidebar
+- Confirm Whale Flow table loads (mock or real data)
+- Confirm Liquidation Heatmap shows blur overlay for free tier
+- Confirm sign out returns to `/auth`
+- Confirm Google OAuth button initiates flow
 
 ---
 
 ## Technical Sequence
 
 ```text
-1. Run SQL migration (tables, enums, functions, triggers, RLS)
-2. Configure Google OAuth via social login tool
-3. Create useAuth hook
-4. Create Auth page (/auth)
-5. Create AuthGuard component
-6. Update App.tsx with routes
-7. Update TopBar with user info + sign out
-8. Update TerminalSidebar with tier badge
-9. Polish Index.tsx layout (responsive grid, more data rows)
+1. Create useSubscriptionTier hook
+2. Create useMarketIntel hook  
+3. Create analyze-market edge function + config.toml update
+4. Create fetch-prices edge function + config.toml update
+5. Create WhaleFlowTable component (with AI analysis panel)
+6. Create LiquidationHeatmap component (with pro gate)
+7. Update LiveTicker to use fetch-prices edge function
+8. Update Index.tsx to use new components
+9. Test auth flow end-to-end
 ```
 
 ---
 
-## Security Summary
-- Roles stored in separate `user_roles` table (never on profiles)
-- `has_role()` security definer prevents recursive RLS
-- `market_intel` premium data gated at database level via RLS -- free users physically cannot fetch premium rows
-- No frontend-only gating; the blur overlay is cosmetic defense-in-depth on top of real RLS
-- Admin status checked via `has_role()`, never localStorage
+## Files Created
+- `supabase/functions/analyze-market/index.ts`
+- `supabase/functions/fetch-prices/index.ts`
+- `src/hooks/useSubscriptionTier.ts`
+- `src/hooks/useMarketIntel.ts`
+- `src/components/WhaleFlowTable.tsx`
+- `src/components/LiquidationHeatmap.tsx`
 
+## Files Modified
+- `supabase/config.toml` (add function configs)
+- `src/components/LiveTicker.tsx` (wire to edge function)
+- `src/pages/Index.tsx` (swap in real components)
