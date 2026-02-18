@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import TerminalCard from "./TerminalCard";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useMarketIntel } from "@/hooks/useMarketIntel";
@@ -36,6 +37,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const LiquidationHeatmap = () => {
+  const navigate = useNavigate();
   const { isPro, loading: tierLoading } = useSubscriptionTier();
   const { data: dbData } = useMarketIntel();
 
@@ -55,12 +57,12 @@ const LiquidationHeatmap = () => {
     <TerminalCard title="Liquidation Heatmap">
       <div className="relative">
         {!tierLoading && !isPro && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm cursor-pointer" onClick={() => navigate("/pricing?return=/liquidations")}>
             <Lock className="h-5 w-5 text-primary mb-2" />
             <span className="text-[10px] uppercase tracking-widest text-primary font-bold">
               Terminal Access Restricted
             </span>
-            <span className="text-[10px] text-muted-foreground mt-1">Upgrade to PRO</span>
+            <span className="text-[10px] text-muted-foreground mt-1">Click to view plans</span>
           </div>
         )}
         <ResponsiveContainer width="100%" height={160}>
