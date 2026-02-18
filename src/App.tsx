@@ -7,6 +7,11 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import AuthGuard from "./components/AuthGuard";
+import Pricing from "./pages/Pricing";
+import WhaleFlows from "./pages/WhaleFlows";
+import Liquidations from "./pages/Liquidations";
+import DataRoom from "./pages/DataRoom";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -18,6 +23,11 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/pricing" element={<AuthGuard><Pricing /></AuthGuard>} />
+          <Route path="/whale-flows" element={<AuthGuard><WhaleFlows /></AuthGuard>} />
+          <Route path="/liquidations" element={<AuthGuard><Liquidations /></AuthGuard>} />
+          <Route path="/data-room" element={<AuthGuard><DataRoom /></AuthGuard>} />
+          <Route path="/admin" element={<Admin />} />
           <Route
             path="/"
             element={

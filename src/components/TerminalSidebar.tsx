@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -28,7 +29,8 @@ const SidebarItem = ({ icon, label, active, locked, onClick }: SidebarItemProps)
   </button>
 );
 
-const TerminalSidebar = () => {
+const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [tier, setTier] = useState<string>("free");
 
@@ -57,17 +59,21 @@ const TerminalSidebar = () => {
       </div>
 
       <nav className="flex-1 py-2 space-y-0.5">
-        <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active />
-        <SidebarItem icon={<Waves className="h-3.5 w-3.5" />} label="Whale Flows" />
+        <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active={activeItem === "dashboard"} onClick={() => navigate("/")} />
+        <SidebarItem icon={<Waves className="h-3.5 w-3.5" />} label="Whale Flows" active={activeItem === "whale-flows"} onClick={() => navigate("/whale-flows")} />
         <SidebarItem
           icon={<Flame className="h-3.5 w-3.5" />}
           label="Liquidations"
+          active={activeItem === "liquidations"}
           locked={tier === "free"}
+          onClick={() => navigate(tier === "free" ? "/pricing?return=/liquidations" : "/liquidations")}
         />
         <SidebarItem
           icon={<Database className="h-3.5 w-3.5" />}
           label="Data Room"
+          active={activeItem === "data-room"}
           locked={tier === "free"}
+          onClick={() => navigate(tier === "free" ? "/pricing?return=/data-room" : "/data-room")}
         />
       </nav>
 
