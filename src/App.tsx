@@ -12,6 +12,8 @@ import WhaleFlows from "./pages/WhaleFlows";
 import Liquidations from "./pages/Liquidations";
 import DataRoom from "./pages/DataRoom";
 import Admin from "./pages/Admin";
+import NetworkHealth from "./pages/NetworkHealth";
+import DePINTracker from "./pages/DePINTracker";
 
 const queryClient = new QueryClient();
 
@@ -27,15 +29,10 @@ const App = () => (
           <Route path="/whale-flows" element={<AuthGuard><WhaleFlows /></AuthGuard>} />
           <Route path="/liquidations" element={<AuthGuard><Liquidations /></AuthGuard>} />
           <Route path="/data-room" element={<AuthGuard><DataRoom /></AuthGuard>} />
+          <Route path="/network-health" element={<AuthGuard><NetworkHealth /></AuthGuard>} />
+          <Route path="/depin-tracker" element={<AuthGuard><DePINTracker /></AuthGuard>} />
           <Route path="/admin" element={<Admin />} />
-          <Route
-            path="/"
-            element={
-              <AuthGuard>
-                <Index />
-              </AuthGuard>
-            }
-          />
+          <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
