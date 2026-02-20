@@ -1,1 +1,10 @@
 project_id = "kkrryfpmbpwvucpmsarz"
+
+[functions.analyze-market]
+verify_jwt = false
+
+[functions.fetch-prices]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false

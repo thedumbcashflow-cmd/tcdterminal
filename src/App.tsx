@@ -14,6 +14,7 @@ import DataRoom from "./pages/DataRoom";
 import Admin from "./pages/Admin";
 import NetworkHealth from "./pages/NetworkHealth";
 import DePINTracker from "./pages/DePINTracker";
+import ChatBubble from "./components/ChatBubble";
 
 const queryClient = new QueryClient();
 
