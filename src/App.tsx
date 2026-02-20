@@ -23,6 +23,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <ChatBubble />
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
