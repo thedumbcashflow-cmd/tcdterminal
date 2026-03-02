@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      feature_requests: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_intel: {
         Row: {
           asset_symbol: string
@@ -77,6 +110,90 @@ export type Database = {
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           updated_at?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      provider_status: {
+        Row: {
+          error_message: string | null
+          last_error_at: string | null
+          last_success_at: string | null
+          latency_ms: number | null
+          provider: string
+        }
+        Insert: {
+          error_message?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          latency_ms?: number | null
+          provider: string
+        }
+        Update: {
+          error_message?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          latency_ms?: number | null
+          provider?: string
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          id: string
+          plan: string
+          provider: string
+          provider_subscription_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          plan: string
+          provider: string
+          provider_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          id?: string
+          plan?: string
+          provider?: string
+          provider_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sync_jobs: {
+        Row: {
+          error_message: string | null
+          job_name: string
+          last_run_at: string | null
+          rows_written: number | null
+          status: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          job_name: string
+          last_run_at?: string | null
+          rows_written?: number | null
+          status?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          job_name?: string
+          last_run_at?: string | null
+          rows_written?: number | null
+          status?: string | null
         }
         Relationships: []
       }
