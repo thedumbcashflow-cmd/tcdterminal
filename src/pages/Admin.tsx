@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import TerminalCard from "@/components/TerminalCard";
 import { format } from "date-fns";
-import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type MarketIntel = Tables<"market_intel">;
@@ -24,7 +24,8 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests">("data");
+  const [adminTier, setAdminTier] = useState<string>("free");
 
   // New record form
   const [newAsset, setNewAsset] = useState("SOL");
@@ -46,12 +47,25 @@ const Admin = () => {
   // Signal broadcaster
   const [signalText, setSignalText] = useState("");
 
+  // Feature requests
+  const [featureRequests, setFeatureRequests] = useState<any[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+
+  // Sync jobs
+  const [syncJobs, setSyncJobs] = useState<any[]>([]);
+  const [providerStatuses, setProviderStatuses] = useState<any[]>([]);
+  const [runningSyncNow, setRunningSyncNow] = useState(false);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) { navigate("/auth"); return; }
     const checkAdmin = async () => {
-      const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
-      setIsAdmin(!!data);
+      const [{ data: roleData }, { data: profileData }] = await Promise.all([
+        supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+        supabase.from("profiles").select("subscription_tier").eq("id", user.id).single(),
+      ]);
+      setIsAdmin(!!roleData);
+      setAdminTier(profileData?.subscription_tier || "free");
       setChecking(false);
     };
     checkAdmin();
@@ -74,10 +88,28 @@ const Admin = () => {
     setRoles(rls || []);
   };
 
+  const fetchFeatureRequests = async () => {
+    setLoadingRequests(true);
+    const { data } = await supabase.from("feature_requests" as any).select("*").order("created_at", { ascending: false } as any) as any;
+    setFeatureRequests(data || []);
+    setLoadingRequests(false);
+  };
+
+  const fetchSyncData = async () => {
+    const [{ data: jobs }, { data: providers }] = await Promise.all([
+      supabase.from("sync_jobs" as any).select("*") as any,
+      supabase.from("provider_status" as any).select("*") as any,
+    ]);
+    setSyncJobs(jobs || []);
+    setProviderStatuses(providers || []);
+  };
+
   useEffect(() => {
     if (isAdmin) {
       fetchRecords();
       fetchRolesData();
+      fetchFeatureRequests();
+      fetchSyncData();
     }
   }, [isAdmin]);
 
@@ -119,6 +151,29 @@ const Admin = () => {
     fetchRolesData();
   };
 
+  const updateRequestStatus = async (id: string, status: string) => {
+    await (supabase.from("feature_requests" as any).update({ status } as any).eq("id", id) as any);
+    fetchFeatureRequests();
+  };
+
+  const runSyncNow = async () => {
+    setRunningSyncNow(true);
+    try {
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-market-data`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({}),
+      });
+      await fetchSyncData();
+    } catch (e) {
+      console.error("Sync failed:", e);
+    }
+    setRunningSyncNow(false);
+  };
+
   if (authLoading || checking) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -145,6 +200,7 @@ const Admin = () => {
   const premiumCount = records.filter((r) => r.is_premium).length;
   const oldestRecord = records.length > 0 ? records[records.length - 1].created_at : null;
   const newestRecord = records.length > 0 ? records[0].created_at : null;
+  const isPaidAdmin = adminTier === "pro" || adminTier === "whale";
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,24 +215,25 @@ const Admin = () => {
         </div>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-data">
           <span>Last refresh: {format(lastRefresh, "HH:mm:ss")}</span>
-          <button onClick={() => { fetchRecords(); fetchRolesData(); }} className="border border-border px-2 py-1 hover:text-primary transition-colors">
+          <button onClick={() => { fetchRecords(); fetchRolesData(); fetchFeatureRequests(); fetchSyncData(); }} className="border border-border px-2 py-1 hover:text-primary transition-colors">
             <RefreshCw className="h-3 w-3" />
           </button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-border flex">
-        {(["data", "roles", "monitoring"] as const).map((tab) => (
+      <div className="border-b border-border flex overflow-x-auto">
+        {(["data", "roles", "requests", "monitoring"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors ${
+            className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors whitespace-nowrap ${
               activeTab === tab ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {tab === "data" && "Market Data"}
             {tab === "roles" && "User Roles"}
+            {tab === "requests" && "Requests Queue"}
             {tab === "monitoring" && "Monitoring"}
           </button>
         ))}
@@ -289,8 +346,8 @@ const Admin = () => {
         {activeTab === "roles" && (
           <>
             <TerminalCard title="Assign Role" className="mb-4">
-              <div className="flex items-end gap-3 p-2">
-                <div className="flex-1">
+              <div className="flex flex-col sm:flex-row items-end gap-3 p-2">
+                <div className="flex-1 w-full">
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">User ID</label>
                   <select value={newRoleUserId} onChange={(e) => setNewRoleUserId(e.target.value)} className="mt-1 w-full border border-border bg-background px-2 py-1 text-xs font-data text-foreground">
                     <option value="">Select user...</option>
@@ -299,7 +356,7 @@ const Admin = () => {
                     ))}
                   </select>
                 </div>
-                <div>
+                <div className="w-full sm:w-auto">
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Role</label>
                   <select value={newRoleValue} onChange={(e) => setNewRoleValue(e.target.value as any)} className="mt-1 w-full border border-border bg-background px-2 py-1 text-xs font-data text-foreground">
                     <option value="admin">Admin</option>
@@ -314,41 +371,102 @@ const Admin = () => {
             </TerminalCard>
 
             <TerminalCard title="Current Roles">
-              <div className="grid grid-cols-4 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <span>User</span><span>User ID</span><span>Role</span><span>Actions</span>
+              <div className="overflow-x-auto">
+                <div className="grid grid-cols-4 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground min-w-[400px]">
+                  <span>User</span><span>User ID</span><span>Role</span><span>Actions</span>
+                </div>
+                {roles.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-muted-foreground">No roles assigned.</div>
+                ) : (
+                  roles.map((r) => {
+                    const profile = profiles.find((p) => p.id === r.user_id);
+                    return (
+                      <div key={r.id} className="grid grid-cols-4 border-b border-border/30 px-2 py-1.5 font-data text-xs items-center hover:bg-secondary/30 transition-colors min-w-[400px]">
+                        <span className="text-foreground font-bold">{profile?.username || "—"}</span>
+                        <span className="text-muted-foreground truncate">{r.user_id.slice(0, 12)}...</span>
+                        <span className="text-primary uppercase">{r.role}</span>
+                        <button onClick={() => removeRole(r.id)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-              {roles.length === 0 ? (
-                <div className="py-4 text-center text-xs text-muted-foreground">No roles assigned.</div>
-              ) : (
-                roles.map((r) => {
-                  const profile = profiles.find((p) => p.id === r.user_id);
-                  return (
-                    <div key={r.id} className="grid grid-cols-4 border-b border-border/30 px-2 py-1.5 font-data text-xs items-center hover:bg-secondary/30 transition-colors">
-                      <span className="text-foreground font-bold">{profile?.username || "—"}</span>
-                      <span className="text-muted-foreground truncate">{r.user_id.slice(0, 12)}...</span>
-                      <span className="text-primary uppercase">{r.role}</span>
-                      <button onClick={() => removeRole(r.id)} className="text-muted-foreground hover:text-destructive transition-colors">
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })
-              )}
             </TerminalCard>
 
             <TerminalCard title="User Profiles" className="mt-4">
-              <div className="grid grid-cols-4 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <span>Username</span><span>Tier</span><span>Created</span><span>ID</span>
-              </div>
-              {profiles.map((p) => (
-                <div key={p.id} className="grid grid-cols-4 border-b border-border/30 px-2 py-1.5 font-data text-xs hover:bg-secondary/30 transition-colors">
-                  <span className="text-foreground font-bold">{p.username || "—"}</span>
-                  <span className="text-primary uppercase">{p.subscription_tier}</span>
-                  <span className="text-muted-foreground">{format(new Date(p.created_at), "yyyy-MM-dd")}</span>
-                  <span className="text-muted-foreground truncate">{p.id.slice(0, 12)}...</span>
+              <div className="overflow-x-auto">
+                <div className="grid grid-cols-4 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground min-w-[400px]">
+                  <span>Username</span><span>Tier</span><span>Created</span><span>ID</span>
                 </div>
-              ))}
+                {profiles.map((p) => (
+                  <div key={p.id} className="grid grid-cols-4 border-b border-border/30 px-2 py-1.5 font-data text-xs hover:bg-secondary/30 transition-colors min-w-[400px]">
+                    <span className="text-foreground font-bold">{p.username || "—"}</span>
+                    <span className="text-primary uppercase">{p.subscription_tier}</span>
+                    <span className="text-muted-foreground">{format(new Date(p.created_at), "yyyy-MM-dd")}</span>
+                    <span className="text-muted-foreground truncate">{p.id.slice(0, 12)}...</span>
+                  </div>
+                ))}
+              </div>
             </TerminalCard>
+          </>
+        )}
+
+        {/* REQUESTS QUEUE TAB */}
+        {activeTab === "requests" && (
+          <>
+            {!isPaidAdmin ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Lock className="h-8 w-8 text-muted-foreground mb-3" />
+                <h2 className="font-serif text-lg font-bold text-foreground">Paid Admin Feature</h2>
+                <p className="mt-2 text-sm text-muted-foreground text-center">Upgrade to Pro or Whale to manage feature requests.</p>
+                <button
+                  onClick={() => navigate("/pricing?return=/admin")}
+                  className="mt-4 border border-primary bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
+                >
+                  Upgrade Plan
+                </button>
+              </div>
+            ) : (
+              <TerminalCard title={`Feature Requests (${featureRequests.length})`}>
+                {loadingRequests ? (
+                  <div className="flex items-center justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+                ) : featureRequests.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted-foreground">No feature requests yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <div className="grid grid-cols-5 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground min-w-[500px]">
+                      <span>Title</span><span>Priority</span><span>Status</span><span>Created</span><span>Actions</span>
+                    </div>
+                    {featureRequests.map((req: any) => (
+                      <div key={req.id} className="grid grid-cols-5 border-b border-border/30 px-2 py-1.5 font-data text-xs items-center hover:bg-secondary/30 transition-colors min-w-[500px]">
+                        <div className="truncate">
+                          <span className="text-foreground font-bold">{req.title}</span>
+                          {req.description && <p className="text-muted-foreground text-[10px] truncate">{req.description}</p>}
+                        </div>
+                        <span className={`uppercase ${req.priority === "high" ? "text-terminal-red" : req.priority === "medium" ? "text-primary" : "text-muted-foreground"}`}>
+                          {req.priority}
+                        </span>
+                        <select
+                          value={req.status}
+                          onChange={(e) => updateRequestStatus(req.id, e.target.value)}
+                          className="border border-border bg-background px-1 py-0.5 text-[10px] font-data text-foreground"
+                        >
+                          <option value="new">New</option>
+                          <option value="in_review">In Review</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="done">Done</option>
+                        </select>
+                        <span className="text-muted-foreground">{format(new Date(req.created_at), "MM/dd HH:mm")}</span>
+                        <span className="text-muted-foreground truncate">{req.user_id?.slice(0, 8)}...</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TerminalCard>
+            )}
           </>
         )}
 
@@ -374,6 +492,62 @@ const Admin = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </TerminalCard>
+
+            {/* Sync Jobs */}
+            <TerminalCard title="Sync Jobs" className="mb-4">
+              <div className="p-2">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Automated Market Data Sync</span>
+                  <button
+                    onClick={runSyncNow}
+                    disabled={runningSyncNow}
+                    className="flex items-center gap-1 border border-primary bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+                  >
+                    {runningSyncNow ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    Run Sync Now
+                  </button>
+                </div>
+                {syncJobs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No sync jobs recorded yet. Click "Run Sync Now" to start.</p>
+                ) : (
+                  syncJobs.map((job: any) => (
+                    <div key={job.job_name} className="border border-border/50 p-2 mb-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-foreground">{job.job_name}</span>
+                        <span className={`font-data text-[10px] ${job.status === "success" ? "text-terminal-green" : "text-terminal-red"}`}>{job.status?.toUpperCase()}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Last run: {job.last_run_at ? format(new Date(job.last_run_at), "yyyy-MM-dd HH:mm:ss") : "Never"} ◆ Rows: {job.rows_written || 0}
+                      </div>
+                      {job.error_message && <p className="text-[10px] text-terminal-red mt-1">{job.error_message}</p>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </TerminalCard>
+
+            {/* Provider Status */}
+            <TerminalCard title="Provider Status" className="mb-4">
+              <div className="p-2">
+                {providerStatuses.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No provider status data yet.</p>
+                ) : (
+                  providerStatuses.map((p: any) => (
+                    <div key={p.provider} className="border border-border/50 p-2 mb-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-foreground uppercase">{p.provider}</span>
+                        <span className={`h-1.5 w-1.5 rounded-full ${p.last_success_at ? "bg-terminal-green" : "bg-terminal-red"}`} />
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {p.last_success_at && <>Success: {format(new Date(p.last_success_at), "HH:mm:ss")} ◆ </>}
+                        {p.latency_ms && <>{p.latency_ms}ms ◆ </>}
+                        {p.error_message && <span className="text-terminal-red">{p.error_message}</span>}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </TerminalCard>
 
