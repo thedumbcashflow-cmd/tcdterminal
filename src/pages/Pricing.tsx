@@ -5,67 +5,105 @@ import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
-const PLANS = [
+type BillingPeriod = "monthly" | "quarterly" | "yearly";
+
+const PRICING_CONFIG = {
+  pro: {
+    monthly: 199,
+    quarterly: 549,
+    yearly: 1999,
+  },
+  whale: {
+    monthly: 799,
+    quarterly: 2199,
+    yearly: 7999,
+  },
+};
+
+const PERIOD_LABELS: Record<BillingPeriod, string> = {
+  monthly: "/mo",
+  quarterly: "/qtr",
+  yearly: "/yr",
+};
+
+const PERIOD_SAVINGS: Record<BillingPeriod, string> = {
+  monthly: "",
+  quarterly: "≈8% off",
+  yearly: "≈16% off",
+};
+
+const PLANS = (period: BillingPeriod) => [
   {
     name: "FREE",
-    price: "$0",
-    period: "forever",
+    price: 0,
     tier: "free" as const,
+    tagline: "Teaser tier",
     features: [
       "Dashboard overview",
-      "Basic whale flow monitor",
+      "Basic whale flow monitor (delayed)",
       "Live price ticker",
-      "Network health stats",
       "Community support",
     ],
     locked: [
-      "Liquidation heatmap",
-      "Data Room access",
-      "AI market analysis",
-      "Premium whale flows",
-      "Export & API access",
+      "Full Whale Flows",
+      "Liquidation Heatmap",
+      "Data Room",
+      "AI Market Briefs",
+      "Network Health",
+      "DePIN Tracker",
+      "Alerts & Export",
     ],
+    justification: null,
   },
   {
     name: "PRO",
-    price: "$49",
-    period: "/month",
+    price: PRICING_CONFIG.pro[period],
     tier: "pro" as const,
     popular: true,
+    tagline: "Operator tier",
     features: [
-      "Everything in Free",
-      "Liquidation heatmap",
+      "Full Whale Flows (real-time + historical)",
+      "Liquidation Heatmap — full depth + cluster breakdown",
+      "Network Health + DePIN Tracker dashboards",
+      "AI Market Briefs (daily + on-demand)",
       "Data Room access",
-      "AI market analysis",
-      "Premium whale flows",
+      "Export (CSV) for whale flows + liquidations",
       "Priority support",
     ],
-    locked: ["Export & API access", "White-glove onboarding"],
+    locked: [
+      "API access",
+      "Advanced multi-condition alerts",
+      "White-glove onboarding",
+    ],
+    justification: "Replaces hours/day of manual dashboard hopping. One terminal compresses signals. You're paying for real-time intelligence + time saved, not UI.",
   },
   {
     name: "WHALE",
-    price: "$199",
-    period: "/month",
+    price: PRICING_CONFIG.whale[period],
     tier: "whale" as const,
+    tagline: "Institutional tier",
     features: [
-      "Everything in Pro",
-      "Export & API access",
+      "Everything in PRO",
+      "Advanced alerts (multi-condition, webhook/email)",
+      "API access (read-only endpoints)",
       "White-glove onboarding",
-      "Custom alerts",
-      "Direct analyst access",
-      "Institutional data feeds",
+      "Priority support + direct analyst channel",
+      "Higher rate limits",
     ],
     locked: [],
+    justification: "Targets desks, funds & operators. One avoided bad trade pays the month. API + advanced alerts are the real institutional surface area.",
   },
 ];
 
 const Pricing = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const returnTo = searchParams.get("return") || "/";
+  const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
-  const { tier: currentTier } = useSubscriptionTier();
+  const { tier: currentTier, isPro } = useSubscriptionTier();
   const { user } = useAuth();
+
+  const initialPeriod = (searchParams.get("period") as BillingPeriod) || "monthly";
+  const [period, setPeriod] = useState<BillingPeriod>(initialPeriod);
 
   // Feature request state
   const [showRequestForm, setShowRequestForm] = useState(false);
@@ -75,13 +113,17 @@ const Pricing = () => {
   const [reqSubmitting, setReqSubmitting] = useState(false);
   const [reqSuccess, setReqSuccess] = useState(false);
 
+  const isPaidUser = isPro || currentTier === "whale";
+
+  const handlePeriodChange = (p: BillingPeriod) => {
+    setPeriod(p);
+    setSearchParams({ period: p });
+  };
+
   const handleUpgrade = (tier: string) => {
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
+    if (!user) { navigate("/auth"); return; }
     if (tier === "free") return;
-    navigate(`/checkout?plan=${tier}&period=monthly`);
+    navigate(`/checkout?plan=${tier}&period=${period}`);
   };
 
   const submitRequest = async (e: React.FormEvent) => {
@@ -104,14 +146,16 @@ const Pricing = () => {
     setShowRequestForm(false);
   };
 
+  const plans = PLANS(period);
+
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="mx-auto max-w-4xl">
+    <div className="min-h-screen bg-background p-4 md:p-6">
+      <div className="mx-auto max-w-5xl">
         {/* Header */}
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <button
             onClick={() => navigate("/")}
-            className="mb-4 text-xs text-muted-foreground hover:text-primary transition-colors"
+            className="mb-3 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             ← Back to Terminal
           </button>
@@ -126,9 +170,31 @@ const Pricing = () => {
           )}
         </div>
 
+        {/* Billing Toggle */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex border border-border bg-card">
+            {(["monthly", "quarterly", "yearly"] as BillingPeriod[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => handlePeriodChange(p)}
+                className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  period === p
+                    ? "bg-primary/20 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {p}
+                {PERIOD_SAVINGS[p] && (
+                  <span className="ml-1 text-[9px] text-terminal-green">{PERIOD_SAVINGS[p]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Plan Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {PLANS.map((plan) => {
+          {plans.map((plan) => {
             const isCurrent = plan.tier === currentTier;
             return (
               <div
@@ -138,41 +204,56 @@ const Pricing = () => {
                 }`}
               >
                 {plan.popular && (
-                  <div className="mb-3 inline-block self-start border border-primary bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
+                  <div className="mb-2 inline-block self-start border border-primary bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
                     Most Popular
                   </div>
                 )}
                 <h2 className="font-serif text-lg font-bold text-foreground">{plan.name}</h2>
-                <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-data text-3xl font-bold text-primary">{plan.price}</span>
-                  <span className="text-xs text-muted-foreground">{plan.period}</span>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">{plan.tagline}</p>
+                <div className="flex items-baseline gap-1">
+                  {plan.price === 0 ? (
+                    <span className="font-data text-3xl font-bold text-primary">$0</span>
+                  ) : (
+                    <>
+                      <span className="font-data text-3xl font-bold text-primary">${plan.price.toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">{PERIOD_LABELS[period]}</span>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-4 flex-1 space-y-2">
                   {plan.features.map((f) => (
-                    <div key={f} className="flex items-center gap-2 text-xs text-foreground">
-                      <Check className="h-3 w-3 text-terminal-green flex-shrink-0" />
+                    <div key={f} className="flex items-start gap-2 text-xs text-foreground">
+                      <Check className="h-3 w-3 text-terminal-green flex-shrink-0 mt-0.5" />
                       {f}
                     </div>
                   ))}
                   {plan.locked.map((f) => (
-                    <div key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Lock className="h-3 w-3 flex-shrink-0" />
+                    <div key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Lock className="h-3 w-3 flex-shrink-0 mt-0.5" />
                       {f}
                     </div>
                   ))}
                 </div>
 
+                {plan.justification && (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="text-[10px] text-muted-foreground italic leading-relaxed">
+                      {plan.justification}
+                    </p>
+                  </div>
+                )}
+
                 <button
                   onClick={() => handleUpgrade(plan.tier)}
                   disabled={isCurrent}
-                  className={`mt-5 w-full border py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
+                  className={`mt-4 w-full border py-2.5 text-xs font-bold uppercase tracking-wider transition-colors ${
                     isCurrent
                       ? "border-border text-muted-foreground cursor-default"
                       : "border-primary bg-primary/10 text-primary hover:bg-primary/20"
                   }`}
                 >
-                  {isCurrent ? "CURRENT PLAN" : plan.tier === "free" ? "DOWNGRADE" : "UPGRADE"}
+                  {isCurrent ? "CURRENT PLAN" : plan.tier === "free" ? "FREE TIER" : `UPGRADE — $${plan.price.toLocaleString()}${PERIOD_LABELS[period]}`}
                 </button>
               </div>
             );
@@ -183,13 +264,26 @@ const Pricing = () => {
         <div className="mt-8 border border-border bg-card p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Request a Feature</h3>
-            <button
-              onClick={() => setShowRequestForm(!showRequestForm)}
-              className="flex items-center gap-1 border border-primary bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
-            >
-              <MessageSquarePlus className="h-3 w-3" />
-              {showRequestForm ? "Close" : "New Request"}
-            </button>
+            {isPaidUser ? (
+              <button
+                onClick={() => setShowRequestForm(!showRequestForm)}
+                className="flex items-center gap-1 border border-primary bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
+              >
+                <MessageSquarePlus className="h-3 w-3" />
+                {showRequestForm ? "Close" : "New Request"}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <Lock className="h-3 w-3" />
+                <span>PRO or WHALE required</span>
+                <button
+                  onClick={() => handleUpgrade("pro")}
+                  className="border border-primary bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary hover:bg-primary/20 transition-colors"
+                >
+                  Upgrade
+                </button>
+              </div>
+            )}
           </div>
 
           {reqSuccess && (
@@ -198,7 +292,7 @@ const Pricing = () => {
             </div>
           )}
 
-          {showRequestForm && (
+          {showRequestForm && isPaidUser && (
             <form onSubmit={submitRequest} className="space-y-3">
               <div>
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Title *</label>
@@ -248,7 +342,7 @@ const Pricing = () => {
 
         <div className="mt-6 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-            All plans include AES-256 encryption ◆ 99.9% uptime SLA ◆ SOC2 compliant
+            All plans include AES-256 encryption ◆ 99.9% uptime SLA ◆ Secure PayPal checkout
           </p>
         </div>
       </div>
