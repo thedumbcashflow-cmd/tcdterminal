@@ -1,6 +1,7 @@
-import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard } from "lucide-react";
+import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -31,7 +32,8 @@ const SidebarItem = ({ icon, label, active, locked, onClick }: SidebarItemProps)
 
 const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [tier, setTier] = useState<string>("free");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -47,30 +49,10 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
       });
   }, [user]);
 
-  const isFree = tier === "free";
+  // Admins bypass all locks
+  const isLocked = (requiresPaid: boolean) => requiresPaid && tier === "free" && !isAdmin;
 
-  const navItems = (
-    <>
-      <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active={activeItem === "dashboard"} onClick={() => { navigate("/"); setIsOpen(false); }} />
-      <SidebarItem icon={<Waves className="h-3.5 w-3.5" />} label="Whale Flows" active={activeItem === "whale-flows"} onClick={() => { navigate("/whale-flows"); setIsOpen(false); }} />
-      <SidebarItem
-        icon={<Flame className="h-3.5 w-3.5" />}
-        label="Liquidations"
-        active={activeItem === "liquidations"}
-        locked={isFree}
-        onClick={() => { navigate(isFree ? "/pricing?return=/liquidations" : "/liquidations"); setIsOpen(false); }}
-      />
-      <SidebarItem
-        icon={<Database className="h-3.5 w-3.5" />}
-        label="Data Room"
-        active={activeItem === "data-room"}
-        locked={isFree}
-        onClick={() => { navigate(isFree ? "/pricing?return=/data-room" : "/data-room"); setIsOpen(false); }}
-      />
-      <SidebarItem icon={<Activity className="h-3.5 w-3.5" />} label="Network Health" active={activeItem === "network-health"} onClick={() => { navigate("/network-health"); setIsOpen(false); }} />
-      <SidebarItem icon={<Cpu className="h-3.5 w-3.5" />} label="DePIN Tracker" active={activeItem === "depin-tracker"} onClick={() => { navigate("/depin-tracker"); setIsOpen(false); }} />
-    </>
-  );
+  const navTo = (path: string) => { navigate(path); setIsOpen(false); };
 
   return (
     <>
@@ -102,7 +84,7 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
               Solana Intelligence
             </div>
             <div className="mt-1.5 inline-block border border-primary/50 bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
-              {tier}
+              {isAdmin ? "ADMIN" : tier}
             </div>
           </div>
           <button onClick={() => setIsOpen(false)} className="md:hidden text-muted-foreground hover:text-primary">
@@ -111,12 +93,33 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
         </div>
 
         <nav className="flex-1 py-2 space-y-0.5">
-          {navItems}
+          <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active={activeItem === "dashboard"} onClick={() => navTo("/")} />
+          <SidebarItem icon={<Waves className="h-3.5 w-3.5" />} label="Whale Flows" active={activeItem === "whale-flows"} onClick={() => navTo("/whale-flows")} />
+          <SidebarItem
+            icon={<Flame className="h-3.5 w-3.5" />}
+            label="Liquidations"
+            active={activeItem === "liquidations"}
+            locked={isLocked(true)}
+            onClick={() => navTo(isLocked(true) ? "/pricing?return=/liquidations" : "/liquidations")}
+          />
+          <SidebarItem
+            icon={<Database className="h-3.5 w-3.5" />}
+            label="Data Room"
+            active={activeItem === "data-room"}
+            locked={isLocked(true)}
+            onClick={() => navTo(isLocked(true) ? "/pricing?return=/data-room" : "/data-room")}
+          />
+          <SidebarItem icon={<Activity className="h-3.5 w-3.5" />} label="Network Health" active={activeItem === "network-health"} onClick={() => navTo("/network-health")} />
+          <SidebarItem icon={<Cpu className="h-3.5 w-3.5" />} label="DePIN Tracker" active={activeItem === "depin-tracker"} onClick={() => navTo("/depin-tracker")} />
         </nav>
 
         <div className="border-t border-border p-2 space-y-0.5">
-          <SidebarItem icon={<CreditCard className="h-3.5 w-3.5" />} label="Pricing" active={activeItem === "pricing"} onClick={() => { navigate("/pricing"); setIsOpen(false); }} />
-          <SidebarItem icon={<Settings className="h-3.5 w-3.5" />} label="Settings" />
+          <SidebarItem icon={<CreditCard className="h-3.5 w-3.5" />} label="Pricing" active={activeItem === "pricing"} onClick={() => navTo("/pricing")} />
+          <SidebarItem icon={<Settings className="h-3.5 w-3.5" />} label="Settings" active={activeItem === "settings"} onClick={() => navTo("/settings")} />
+          {isAdmin && (
+            <SidebarItem icon={<Shield className="h-3.5 w-3.5" />} label="Admin" active={activeItem === "admin"} onClick={() => navTo("/admin")} />
+          )}
+          <SidebarItem icon={<LogOut className="h-3.5 w-3.5" />} label="Sign Out" onClick={() => { signOut(); setIsOpen(false); }} />
         </div>
       </aside>
     </>

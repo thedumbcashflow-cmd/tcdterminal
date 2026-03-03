@@ -15,6 +15,7 @@ import Admin from "./pages/Admin";
 import NetworkHealth from "./pages/NetworkHealth";
 import DePINTracker from "./pages/DePINTracker";
 import Checkout from "./pages/Checkout";
+import Settings from "./pages/Settings";
 import ChatBubble from "./components/ChatBubble";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/pricing" element={<AuthGuard><Pricing /></AuthGuard>} />
           <Route path="/checkout" element={<AuthGuard><Checkout /></AuthGuard>} />
+          <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
           <Route path="/whale-flows" element={<AuthGuard><WhaleFlows /></AuthGuard>} />
           <Route path="/liquidations" element={<AuthGuard><Liquidations /></AuthGuard>} />
           <Route path="/data-room" element={<AuthGuard><DataRoom /></AuthGuard>} />
