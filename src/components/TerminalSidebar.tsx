@@ -1,9 +1,8 @@
 import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface SidebarItemProps {
@@ -32,31 +31,15 @@ const SidebarItem = ({ icon, label, active, locked, onClick }: SidebarItemProps)
 
 const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const { isAdmin } = useIsAdmin();
-  const [tier, setTier] = useState<string>("free");
+  const { signOut } = useAuth();
+  const { tier, isAdmin } = useSubscriptionTier();
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("subscription_tier")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (data) setTier(data.subscription_tier);
-      });
-  }, [user]);
-
-  // Admins bypass all locks
   const isLocked = (requiresPaid: boolean) => requiresPaid && tier === "free" && !isAdmin;
-
   const navTo = (path: string) => { navigate(path); setIsOpen(false); };
 
   return (
     <>
-      {/* Mobile hamburger */}
       <button
         onClick={() => setIsOpen(true)}
         className="fixed top-2 left-2 z-50 md:hidden border border-border bg-card p-1.5"
@@ -64,12 +47,10 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
         <Menu className="h-4 w-4 text-primary" />
       </button>
 
-      {/* Mobile overlay */}
       {isOpen && (
         <div className="fixed inset-0 z-40 bg-background/80 md:hidden" onClick={() => setIsOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           "flex h-full w-48 flex-col border-r border-border bg-sidebar flex-shrink-0",
