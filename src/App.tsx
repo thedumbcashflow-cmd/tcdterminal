@@ -17,6 +17,7 @@ import DePINTracker from "./pages/DePINTracker";
 import Checkout from "./pages/Checkout";
 import Settings from "./pages/Settings";
 import ChatBubble from "./components/ChatBubble";
+import WorldMonitor from "./pages/WorldMonitor";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/data-room" element={<AuthGuard><DataRoom /></AuthGuard>} />
           <Route path="/network-health" element={<AuthGuard><NetworkHealth /></AuthGuard>} />
           <Route path="/depin-tracker" element={<AuthGuard><DePINTracker /></AuthGuard>} />
+          <Route path="/world-monitor" element={<AuthGuard><WorldMonitor /></AuthGuard>} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
           <Route path="*" element={<NotFound />} />

@@ -99,7 +99,7 @@ const Pricing = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
-  const { tier: currentTier, isPro } = useSubscriptionTier();
+  const { tier: currentTier, isPro, isAdmin } = useSubscriptionTier();
   const { user } = useAuth();
 
   const initialPeriod = (searchParams.get("period") as BillingPeriod) || "monthly";
@@ -113,7 +113,7 @@ const Pricing = () => {
   const [reqSubmitting, setReqSubmitting] = useState(false);
   const [reqSuccess, setReqSuccess] = useState(false);
 
-  const isPaidUser = isPro || currentTier === "whale";
+  const isPaidUser = isAdmin || isPro || currentTier === "whale";
 
   const handlePeriodChange = (p: BillingPeriod) => {
     setPeriod(p);

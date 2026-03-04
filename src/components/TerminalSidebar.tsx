@@ -1,4 +1,4 @@
-import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut } from "lucide-react";
+import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -111,6 +111,13 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
           />
           <SidebarItem icon={<Activity className="h-3.5 w-3.5" />} label="Network Health" active={activeItem === "network-health"} onClick={() => navTo("/network-health")} />
           <SidebarItem icon={<Cpu className="h-3.5 w-3.5" />} label="DePIN Tracker" active={activeItem === "depin-tracker"} onClick={() => navTo("/depin-tracker")} />
+          <SidebarItem
+            icon={<Globe className="h-3.5 w-3.5" />}
+            label="World Monitor"
+            active={activeItem === "world-monitor"}
+            locked={isLocked(true)}
+            onClick={() => navTo(isLocked(true) ? "/pricing?return=/world-monitor" : "/world-monitor")}
+          />
         </nav>
 
         <div className="border-t border-border p-2 space-y-0.5">
