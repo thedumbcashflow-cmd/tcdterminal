@@ -200,7 +200,8 @@ const Admin = () => {
   const premiumCount = records.filter((r) => r.is_premium).length;
   const oldestRecord = records.length > 0 ? records[records.length - 1].created_at : null;
   const newestRecord = records.length > 0 ? records[0].created_at : null;
-  const isPaidAdmin = adminTier === "pro" || adminTier === "whale";
+  // Admin always has access to all tabs
+  const isPaidAdmin = isAdmin;
 
   return (
     <div className="min-h-screen bg-background">
