@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { invalidateSubscriptionCache } from "@/hooks/useSubscriptionTier";
+import { Loader2, Save } from "lucide-react";
 import TerminalSidebar from "@/components/TerminalSidebar";
 import TopBar from "@/components/TopBar";
 
@@ -17,7 +18,7 @@ const Settings = () => {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [loading, setLoading] = useState(true);
 
@@ -27,15 +28,13 @@ const Settings = () => {
     const load = async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("username, avatar_url")
+        .select("username, display_name, timezone")
         .eq("id", user.id)
         .single();
       if (data) {
-        setUsername(data.username || "");
+        setDisplayName(data.display_name || data.username || "");
+        setTimezone(data.timezone || "UTC");
       }
-      // Load timezone from localStorage (simple persistence)
-      const savedTz = localStorage.getItem("tcd_timezone");
-      if (savedTz) setTimezone(savedTz);
       setLoading(false);
     };
     load();
@@ -46,9 +45,13 @@ const Settings = () => {
     setSaving(true);
     await supabase
       .from("profiles")
-      .update({ username: username.trim() || null })
+      .update({
+        display_name: displayName.trim() || null,
+        username: displayName.trim() || null,
+        timezone: timezone,
+      } as any)
       .eq("id", user.id);
-    localStorage.setItem("tcd_timezone", timezone);
+    invalidateSubscriptionCache();
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
@@ -79,18 +82,16 @@ const Settings = () => {
             )}
 
             <div className="space-y-4">
-              {/* Username */}
               <div className="border border-border bg-card p-4">
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Display Name</label>
                 <input
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
                   className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-data text-foreground"
                   placeholder="Your display name"
                 />
               </div>
 
-              {/* Timezone */}
               <div className="border border-border bg-card p-4">
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Timezone</label>
                 <select
@@ -104,7 +105,6 @@ const Settings = () => {
                 </select>
               </div>
 
-              {/* Email (read-only) */}
               <div className="border border-border bg-card p-4">
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Email</label>
                 <div className="mt-1 w-full border border-border bg-background/50 px-2 py-1.5 text-xs font-data text-muted-foreground">
