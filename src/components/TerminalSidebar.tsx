@@ -33,7 +33,7 @@ const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>(
 );
 SidebarItem.displayName = "SidebarItem";
 
-const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) => {
+const TerminalSidebar = React.forwardRef<HTMLElement, { activeItem?: string }>(({ activeItem = "dashboard" }, ref) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const { tier, isAdmin } = useSubscriptionTier();
@@ -78,7 +78,7 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
         </div>
 
         <nav className="flex-1 py-2 space-y-0.5">
-          <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active={activeItem === "dashboard"} onClick={() => navTo("/")} />
+          <SidebarItem icon={<BarChart3 className="h-3.5 w-3.5" />} label="Dashboard" active={activeItem === "dashboard"} onClick={() => navTo("/dashboard")} />
           <SidebarItem icon={<Waves className="h-3.5 w-3.5" />} label="Whale Flows" active={activeItem === "whale-flows"} onClick={() => navTo("/whale-flows")} />
           <SidebarItem
             icon={<Flame className="h-3.5 w-3.5" />}
@@ -116,6 +116,7 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
       </aside>
     </>
   );
-};
+});
+TerminalSidebar.displayName = "TerminalSidebar";
 
 export default TerminalSidebar;

@@ -189,7 +189,7 @@ const Admin = () => {
           <Shield className="h-8 w-8 text-destructive mx-auto mb-3" />
           <h2 className="font-serif text-lg font-bold text-foreground">Access Denied</h2>
           <p className="mt-2 text-sm text-muted-foreground">Admin role required.</p>
-          <button onClick={() => navigate("/")} className="mt-4 text-xs text-primary hover:underline">← Back to Terminal</button>
+          <button onClick={() => navigate("/dashboard")} className="mt-4 text-xs text-primary hover:underline">← Back to Terminal</button>
         </div>
       </div>
     );
@@ -208,7 +208,7 @@ const Admin = () => {
       {/* Admin header */}
       <div className="border-b border-border bg-card px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-primary">
+          <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-primary">
             <ArrowLeft className="h-4 w-4" />
           </button>
           <Shield className="h-4 w-4 text-primary" />

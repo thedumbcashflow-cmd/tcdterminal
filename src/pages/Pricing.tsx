@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, Lock, MessageSquarePlus, Loader2 } from "lucide-react";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
@@ -95,7 +95,7 @@ const PLANS = (period: BillingPeriod) => [
   },
 ];
 
-const Pricing = () => {
+const Pricing = React.forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
@@ -148,13 +148,13 @@ const Pricing = () => {
 
   const plans = PLANS(period);
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    return (
+    <div ref={ref} className="min-h-screen bg-background p-4 md:p-6">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-6 text-center">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="mb-3 text-xs text-muted-foreground hover:text-primary transition-colors"
           >
             ← Back to Terminal
@@ -348,6 +348,7 @@ const Pricing = () => {
       </div>
     </div>
   );
-};
+});
+Pricing.displayName = "Pricing";
 
 export default Pricing;
