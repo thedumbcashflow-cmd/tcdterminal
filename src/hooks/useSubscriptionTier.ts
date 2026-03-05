@@ -21,11 +21,12 @@ let cachePromise: Promise<void> | null = null;
 
 export const useSubscriptionTier = (): SubscriptionState => {
   const { user } = useAuth();
-  const [tier, setTier] = useState<SubscriptionTier>(cachedResult?.userId === user?.id ? cachedResult.tier : "free");
-  const [isAdmin, setIsAdmin] = useState(cachedResult?.userId === user?.id ? cachedResult.isAdmin : false);
-  const [displayName, setDisplayName] = useState<string | null>(cachedResult?.userId === user?.id ? cachedResult.displayName : null);
-  const [timezone, setTimezone] = useState(cachedResult?.userId === user?.id ? cachedResult.timezone : "UTC");
-  const [loading, setLoading] = useState(cachedResult?.userId !== user?.id);
+  const hasCachedMatch = cachedResult != null && user != null && cachedResult.userId === user.id;
+  const [tier, setTier] = useState<SubscriptionTier>(hasCachedMatch ? cachedResult.tier : "free");
+  const [isAdmin, setIsAdmin] = useState(hasCachedMatch ? cachedResult.isAdmin : false);
+  const [displayName, setDisplayName] = useState<string | null>(hasCachedMatch ? cachedResult.displayName : null);
+  const [timezone, setTimezone] = useState(hasCachedMatch ? cachedResult.timezone : "UTC");
+  const [loading, setLoading] = useState(!hasCachedMatch);
 
   useEffect(() => {
     if (!user) {
