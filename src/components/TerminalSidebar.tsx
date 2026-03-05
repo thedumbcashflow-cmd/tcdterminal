@@ -1,8 +1,8 @@
+import React, { useState } from "react";
 import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface SidebarItemProps {
@@ -13,21 +13,25 @@ interface SidebarItemProps {
   onClick?: () => void;
 }
 
-const SidebarItem = ({ icon, label, active, locked, onClick }: SidebarItemProps) => (
-  <button
-    onClick={onClick}
-    className={cn(
-      "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
-      active
-        ? "bg-primary/10 text-primary border-l-2 border-primary"
-        : "text-muted-foreground hover:bg-secondary hover:text-foreground border-l-2 border-transparent"
-    )}
-  >
-    {icon}
-    <span className="uppercase tracking-wider">{label}</span>
-    {locked && <Lock className="ml-auto h-3 w-3 text-muted-foreground" />}
-  </button>
+const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>(
+  ({ icon, label, active, locked, onClick }, ref) => (
+    <button
+      ref={ref}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors",
+        active
+          ? "bg-primary/10 text-primary border-l-2 border-primary"
+          : "text-muted-foreground hover:bg-secondary hover:text-foreground border-l-2 border-transparent"
+      )}
+    >
+      {icon}
+      <span className="uppercase tracking-wider">{label}</span>
+      {locked && <Lock className="ml-auto h-3 w-3 text-muted-foreground" />}
+    </button>
+  )
 );
+SidebarItem.displayName = "SidebarItem";
 
 const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) => {
   const navigate = useNavigate();

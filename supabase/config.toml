@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.sync-market-data]
 verify_jwt = false
+
+[functions.macro-snapshot]
+verify_jwt = false
