@@ -50,7 +50,7 @@ const NetworkHealth = () => {
           <div className="flex-1 overflow-auto p-3">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-primary transition-colors">
+                <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-primary transition-colors">
                   <ArrowLeft className="h-4 w-4" />
                 </button>
                 <h1 className="font-serif text-sm font-bold text-primary uppercase tracking-wider">
