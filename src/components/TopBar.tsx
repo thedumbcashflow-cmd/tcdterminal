@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useRef } from "react";
 import { Search, LogOut, X } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 
@@ -22,12 +22,12 @@ const SEARCHABLE_ITEMS = [
   { label: "Pricing", route: "/pricing", type: "Page" },
 ];
 
-const TopBar = () => {
+const TopBar = React.forwardRef<HTMLElement>((_, forwardedRef) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const ref = useRef<HTMLDivElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const now = new Date();
 
   const results = searchQuery.length > 0
@@ -38,7 +38,7 @@ const TopBar = () => {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setShowResults(false);
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) setShowResults(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -51,13 +51,13 @@ const TopBar = () => {
   };
 
   return (
-    <header className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5">
+    <header ref={forwardedRef} className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5">
       <div className="flex items-center gap-3">
         <h1 className="font-serif text-sm font-bold tracking-wide text-primary">TCD</h1>
         <span className="text-xs text-muted-foreground hidden md:inline">TOKEN CATALYST DESK</span>
       </div>
 
-      <div ref={ref} className="relative">
+      <div ref={searchContainerRef} className="relative">
         <div className="flex items-center gap-2 border border-border bg-background px-2 py-1">
           <Search className="h-3 w-3 text-muted-foreground" />
           <input
@@ -117,6 +117,7 @@ const TopBar = () => {
       </div>
     </header>
   );
-};
+});
+TopBar.displayName = "TopBar";
 
 export default TopBar;
