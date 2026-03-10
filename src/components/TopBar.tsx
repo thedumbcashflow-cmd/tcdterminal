@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, LogOut, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 
 const SEARCHABLE_ITEMS = [
-  { label: "SOL — Solana", route: "/", type: "Asset" },
-  { label: "BTC — Bitcoin", route: "/", type: "Asset" },
-  { label: "ETH — Ethereum", route: "/", type: "Asset" },
-  { label: "JUP — Jupiter", route: "/", type: "Asset" },
-  { label: "BONK — Bonk", route: "/", type: "Asset" },
-  { label: "RAY — Raydium", route: "/", type: "Asset" },
-  { label: "PYTH — Pyth Network", route: "/", type: "Asset" },
+  { label: "SOL — Solana", route: "/dashboard", type: "Asset" },
+  { label: "BTC — Bitcoin", route: "/dashboard", type: "Asset" },
+  { label: "ETH — Ethereum", route: "/dashboard", type: "Asset" },
+  { label: "JUP — Jupiter", route: "/dashboard", type: "Asset" },
+  { label: "BONK — Bonk", route: "/dashboard", type: "Asset" },
+  { label: "RAY — Raydium", route: "/dashboard", type: "Asset" },
+  { label: "PYTH — Pyth Network", route: "/dashboard", type: "Asset" },
   { label: "HNT — Helium", route: "/depin-tracker", type: "DePIN" },
   { label: "RNDR — Render", route: "/depin-tracker", type: "DePIN" },
   { label: "FIL — Filecoin", route: "/depin-tracker", type: "DePIN" },
@@ -22,7 +22,7 @@ const SEARCHABLE_ITEMS = [
   { label: "Pricing", route: "/pricing", type: "Page" },
 ];
 
-const TopBar = React.forwardRef<HTMLElement>((_, forwardedRef) => {
+const TopBar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const { user, signOut } = useAuth();
@@ -51,7 +51,7 @@ const TopBar = React.forwardRef<HTMLElement>((_, forwardedRef) => {
   };
 
   return (
-    <header ref={forwardedRef} className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5">
+    <header className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5">
       <div className="flex items-center gap-3">
         <h1 className="font-serif text-sm font-bold tracking-wide text-primary">TCD</h1>
         <span className="text-xs text-muted-foreground hidden md:inline">TOKEN CATALYST DECK</span>
@@ -117,7 +117,6 @@ const TopBar = React.forwardRef<HTMLElement>((_, forwardedRef) => {
       </div>
     </header>
   );
-});
-TopBar.displayName = "TopBar";
+};
 
 export default TopBar;

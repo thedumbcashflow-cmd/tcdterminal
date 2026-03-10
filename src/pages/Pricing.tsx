@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Check, Lock, MessageSquarePlus, Loader2 } from "lucide-react";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
@@ -8,16 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 type BillingPeriod = "monthly" | "quarterly" | "yearly";
 
 const PRICING_CONFIG = {
-  pro: {
-    monthly: 199,
-    quarterly: 549,
-    yearly: 1999,
-  },
-  whale: {
-    monthly: 799,
-    quarterly: 2199,
-    yearly: 7999,
-  },
+  pro: { monthly: 199, quarterly: 549, yearly: 1999 },
+  whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
 };
 
 const PERIOD_LABELS: Record<BillingPeriod, string> = {
@@ -95,7 +87,7 @@ const PLANS = (period: BillingPeriod) => [
   },
 ];
 
-const Pricing = React.forwardRef<HTMLDivElement>((_, ref) => {
+const Pricing = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const paymentStatus = searchParams.get("payment");
@@ -105,7 +97,6 @@ const Pricing = React.forwardRef<HTMLDivElement>((_, ref) => {
   const initialPeriod = (searchParams.get("period") as BillingPeriod) || "monthly";
   const [period, setPeriod] = useState<BillingPeriod>(initialPeriod);
 
-  // Feature request state
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [reqTitle, setReqTitle] = useState("");
   const [reqDesc, setReqDesc] = useState("");
@@ -148,8 +139,8 @@ const Pricing = React.forwardRef<HTMLDivElement>((_, ref) => {
 
   const plans = PLANS(period);
 
-    return (
-    <div ref={ref} className="min-h-screen bg-background p-4 md:p-6">
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-6 text-center">
@@ -348,7 +339,6 @@ const Pricing = React.forwardRef<HTMLDivElement>((_, ref) => {
       </div>
     </div>
   );
-});
-Pricing.displayName = "Pricing";
+};
 
 export default Pricing;
