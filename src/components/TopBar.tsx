@@ -54,7 +54,7 @@ const TopBar = React.forwardRef<HTMLElement>((_, forwardedRef) => {
     <header ref={forwardedRef} className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5">
       <div className="flex items-center gap-3">
         <h1 className="font-serif text-sm font-bold tracking-wide text-primary">TCD</h1>
-        <span className="text-xs text-muted-foreground hidden md:inline">TOKEN CATALYST DESK</span>
+        <span className="text-xs text-muted-foreground hidden md:inline">TOKEN CATALYST DECK</span>
       </div>
 
       <div ref={searchContainerRef} className="relative">
