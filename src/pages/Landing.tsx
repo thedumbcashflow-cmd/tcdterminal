@@ -11,7 +11,7 @@ const Landing = () => {
         <div className="flex items-center gap-2">
           <span className="font-serif text-lg font-bold text-primary">◆ TCD</span>
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
-            Token Catalyst Desk
+            Token Catalyst Deck
           </span>
         </div>
         <div className="flex items-center gap-3">
