@@ -303,7 +303,7 @@ const Pricing = () => {
                         : `UPGRADE TO WHALE — $${plan.price.toLocaleString()}${PERIOD_LABELS[period]}`}
                   </button>
                   {plan.isTrial && !isCurrent && (
-                    <p className="font-mono text-[10px] text-zinc-500 text-center mt-1.5">
+                    <p className="font-mono text-[10px] text-muted-foreground text-center mt-1.5">
                       14 days free, then ${MONTHLY_EQUIV.pro.monthly}/mo. Cancel
                       anytime.
                     </p>
