@@ -172,20 +172,19 @@ const Pricing = () => {
           )}
         </div>
 
-        {/* 14-Day Free Trial Banner */}
-        <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mb-8 gap-4">
+        <div className="bg-card border border-border rounded-xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mb-8 gap-4">
           <div>
-            <h3 className="font-semibold text-sm text-zinc-50">
+            <h3 className="font-semibold text-sm text-foreground">
               Start with a 14-day free trial
             </h3>
-            <p className="font-mono text-xs text-zinc-400 mt-1">
+            <p className="font-mono text-xs text-muted-foreground mt-1">
               Full Pro access. No credit card required. Expires automatically —
               no surprise charges.
             </p>
           </div>
           <button
             onClick={() => navigate("/auth")}
-            className="bg-green-500 text-black hover:bg-green-400 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
+            className="bg-terminal-green text-primary-foreground hover:bg-terminal-green/90 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
           >
             Start Free Trial
           </button>
