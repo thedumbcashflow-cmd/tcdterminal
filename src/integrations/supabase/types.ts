@@ -94,6 +94,7 @@ export type Database = {
           id: string
           subscription_tier: Database["public"]["Enums"]["subscription_tier"]
           timezone: string | null
+          trial_ends_at: string | null
           updated_at: string
           username: string | null
         }
@@ -104,6 +105,7 @@ export type Database = {
           id: string
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           timezone?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
           username?: string | null
         }
@@ -114,6 +116,7 @@ export type Database = {
           id?: string
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           timezone?: string | null
+          trial_ends_at?: string | null
           updated_at?: string
           username?: string | null
         }
