@@ -30,7 +30,7 @@ const Settings = () => {
         .from("profiles")
         .select("username, display_name, timezone")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       if (data) {
         setDisplayName(data.display_name || data.username || "");
         setTimezone(data.timezone || "UTC");

@@ -58,7 +58,7 @@ const WorldMonitor = () => {
       <TerminalSidebar activeItem="world-monitor" />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />
-        <div className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="flex-1 overflow-auto overflow-x-hidden p-4 md:p-6">
           {!isPro ? (
             <div className="flex flex-col items-center justify-center h-full">
               <Lock className="h-8 w-8 text-muted-foreground mb-3" />
@@ -75,7 +75,7 @@ const WorldMonitor = () => {
             </div>
           ) : (
             <div className="mx-auto max-w-5xl space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h1 className="font-serif text-xl font-bold text-primary mb-1">◆ World Monitor</h1>
                   <p className="text-xs text-muted-foreground">Global macro intelligence overlay for Solana operators</p>
@@ -103,11 +103,13 @@ const WorldMonitor = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="border border-border bg-card p-4">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">US Fear & Greed</span>
-                  <div className={`font-data text-3xl font-bold mt-1 ${macro ? fngColor(macro.fearGreed.value) : "text-foreground"}`}>
-                    {macro ? macro.fearGreed.value : "—"}
+                  <div className="flex items-baseline justify-between">
+                    <span className={`font-data text-3xl font-bold mt-1 ${macro ? fngColor(macro.fearGreed.value) : "text-foreground"}`}>
+                      {macro ? macro.fearGreed.value : "—"}
+                    </span>
                   </div>
                   <span className="text-xs text-muted-foreground">{macro?.fearGreed.label || "Loading..."}</span>
                   {macro && <div className="mt-1 text-[9px] text-muted-foreground/60">via {macro.fearGreed.source}</div>}
@@ -115,8 +117,10 @@ const WorldMonitor = () => {
 
                 <div className="border border-border bg-card p-4">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">DXY Index (Proxy)</span>
-                  <div className="font-data text-3xl font-bold text-foreground mt-1">
-                    {macro ? macro.dollarIndex.value : "—"}
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-data text-3xl font-bold text-foreground mt-1">
+                      {macro ? macro.dollarIndex.value : "—"}
+                    </span>
                   </div>
                   <span className="text-xs text-muted-foreground">{macro?.dollarIndex.label || "Loading..."}</span>
                   {macro && <div className="mt-1 text-[9px] text-muted-foreground/60">via {macro.dollarIndex.source}</div>}
@@ -124,8 +128,10 @@ const WorldMonitor = () => {
 
                 <div className="border border-border bg-card p-4">
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">BTC Dominance</span>
-                  <div className="font-data text-3xl font-bold text-primary mt-1">
-                    {macro ? `${macro.btcDominance.value}%` : "—"}
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-data text-3xl font-bold text-primary mt-1">
+                      {macro ? `${macro.btcDominance.value}%` : "—"}
+                    </span>
                   </div>
                   <span className="text-xs text-muted-foreground">{macro ? "Global market share" : "Loading..."}</span>
                   {macro && <div className="mt-1 text-[9px] text-muted-foreground/60">via {macro.btcDominance.source}</div>}
