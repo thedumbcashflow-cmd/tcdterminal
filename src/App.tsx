@@ -27,7 +27,6 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <ChatBubble />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -35,14 +34,77 @@ const App = () => (
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/checkout" element={<AuthGuard><Checkout /></AuthGuard>} />
           <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
-          <Route path="/dashboard" element={<AuthGuard><Index /></AuthGuard>} />
-          <Route path="/whale-flows" element={<AuthGuard><WhaleFlows /></AuthGuard>} />
-          <Route path="/liquidations" element={<AuthGuard><Liquidations /></AuthGuard>} />
-          <Route path="/data-room" element={<AuthGuard><DataRoom /></AuthGuard>} />
-          <Route path="/network-health" element={<AuthGuard><NetworkHealth /></AuthGuard>} />
-          <Route path="/depin-tracker" element={<AuthGuard><DePINTracker /></AuthGuard>} />
-          <Route path="/world-monitor" element={<AuthGuard><WorldMonitor /></AuthGuard>} />
-          <Route path="/admin" element={<Admin />} />
+          <Route
+            path="/dashboard"
+            element={
+              <AuthGuard>
+                <Index />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/whale-flows"
+            element={
+              <AuthGuard>
+                <WhaleFlows />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/liquidations"
+            element={
+              <AuthGuard>
+                <Liquidations />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/data-room"
+            element={
+              <AuthGuard>
+                <DataRoom />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/network-health"
+            element={
+              <AuthGuard>
+                <NetworkHealth />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/depin-tracker"
+            element={
+              <AuthGuard>
+                <DePINTracker />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/world-monitor"
+            element={
+              <AuthGuard>
+                <WorldMonitor />
+                <ChatBubble />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <AuthGuard>
+                <Admin />
+              </AuthGuard>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
