@@ -20,7 +20,7 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
         .from("profiles")
         .select("subscription_tier, trial_ends_at")
         .eq("id", user.id)
-        .maybeSingle();
+        .maybeSingle() as { data: { subscription_tier: string; trial_ends_at: string | null } | null };
 
       if (
         data?.subscription_tier === "free" &&
