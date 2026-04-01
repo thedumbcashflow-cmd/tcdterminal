@@ -29,9 +29,7 @@ const TopBar = () => {
   const { user, signOut } = useAuth();
   const { daysLeft, trial } = useSubscription();
   const navigate = useNavigate();
-  const [showResults, setShowResults] = useState(false);
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const searchContainerRef2 = useRef<HTMLDivElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const now = new Date();
 
