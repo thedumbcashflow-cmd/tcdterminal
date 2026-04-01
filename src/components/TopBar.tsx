@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, LogOut, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useNavigate } from "react-router-dom";
 
 const SEARCHABLE_ITEMS = [
@@ -26,6 +27,7 @@ const TopBar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const { user, signOut } = useAuth();
+  const { daysLeft, trial } = useSubscription();
   const navigate = useNavigate();
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const now = new Date();
@@ -104,6 +106,11 @@ const TopBar = () => {
           <span className="h-1.5 w-1.5 rounded-full bg-terminal-green animate-pulse" />
           <span className="text-muted-foreground">LIVE</span>
         </div>
+        {trial?.isTrialActive && daysLeft > 0 && (
+          <span className={`font-mono text-[10px] ${daysLeft <= 7 ? "text-amber-400" : "text-zinc-500"}`}>
+            Trial: {daysLeft}d left
+          </span>
+        )}
         {user && (
           <div className="flex items-center gap-2 border-l border-border pl-3">
             <span className="font-data text-muted-foreground truncate max-w-[120px] hidden sm:inline">

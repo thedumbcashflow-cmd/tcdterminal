@@ -1,92 +1,28 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Check, Lock, MessageSquarePlus, Loader2 } from "lucide-react";
+import { Check, Lock, MessageSquarePlus, Loader2, Zap } from "lucide-react";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
 type BillingPeriod = "monthly" | "quarterly" | "yearly";
 
-const PRICING_CONFIG = {
-  pro: { monthly: 199, quarterly: 537, yearly: 1791 },
-  whale: { monthly: 799, quarterly: 2157, yearly: 7191 },
-};
-
-const MONTHLY_EQUIV: Record<string, Record<BillingPeriod, number>> = {
-  pro: { monthly: 199, quarterly: 179, yearly: 149 },
-  whale: { monthly: 799, quarterly: 719, yearly: 599 },
-};
-
-const PERIOD_LABELS: Record<BillingPeriod, string> = {
-  monthly: "/mo",
-  quarterly: "/qtr",
-  yearly: "/yr",
-};
-
-const PERIOD_SAVINGS: Record<BillingPeriod, string> = {
-  monthly: "",
-  quarterly: "save 10%",
-  yearly: "save 25%",
-};
-
-interface PlanConfig {
-  name: string;
-  tier: "pro" | "whale";
-  price: number;
-  monthlyEquiv: number;
-  popular?: boolean;
-  tagline: string;
-  features: string[];
-  locked: string[];
-  justification: string;
-  isTrial?: boolean;
+function getPrice(base: number, period: BillingPeriod): { display: string; sub: string } {
+  if (period === "monthly") return { display: `$${base}`, sub: "/mo" };
+  if (period === "quarterly") {
+    const mo = Math.round(base * 0.9);
+    return { display: `$${mo}`, sub: "/mo, billed quarterly" };
+  }
+  const mo = Math.round(base * 0.75);
+  return { display: `$${mo}`, sub: "/mo, billed annually" };
 }
 
-const PLANS = (period: BillingPeriod): PlanConfig[] => [
-  {
-    name: "PRO",
-    price: PRICING_CONFIG.pro[period],
-    monthlyEquiv: MONTHLY_EQUIV.pro[period],
-    tier: "pro",
-    popular: true,
-    tagline: "Operator tier",
-    isTrial: true,
-    features: [
-      "Full Whale Flows (real-time + historical)",
-      "Liquidation Heatmap — full depth + cluster breakdown",
-      "Network Health + DePIN Tracker dashboards",
-      "AI Market Briefs (daily + on-demand)",
-      "Data Room access",
-      "Export (CSV) for whale flows + liquidations",
-      "Priority support",
-    ],
-    locked: [
-      "API access",
-      "Advanced multi-condition alerts",
-      "White-glove onboarding",
-    ],
-    justification:
-      "Replaces hours/day of manual dashboard hopping. One terminal compresses signals. You're paying for real-time intelligence + time saved, not UI.",
-  },
-  {
-    name: "WHALE",
-    price: PRICING_CONFIG.whale[period],
-    monthlyEquiv: MONTHLY_EQUIV.whale[period],
-    tier: "whale",
-    tagline: "Institutional tier",
-    features: [
-      "Everything in PRO",
-      "Advanced alerts (multi-condition, webhook/email)",
-      "API access (read-only endpoints)",
-      "White-glove onboarding",
-      "Priority support + direct analyst channel",
-      "Higher rate limits",
-    ],
-    locked: [],
-    justification:
-      "Targets desks, funds & operators. One avoided bad trade pays the month. API + advanced alerts are the real institutional surface area.",
-  },
-];
+function getAnnualTotal(base: number): { total: string; savings: string } {
+  const yearly = Math.round(base * 12 * 0.75);
+  const full = base * 12;
+  const saved = full - yearly;
+  return { total: `$${yearly.toLocaleString()}`, savings: `$${saved.toLocaleString()}` };
+}
 
 const Pricing = () => {
   const navigate = useNavigate();
@@ -141,7 +77,16 @@ const Pricing = () => {
     setShowRequestForm(false);
   };
 
-  const plans = PLANS(period);
+  const proPrice = getPrice(199, period);
+  const whalePrice = getPrice(799, period);
+  const proAnnual = getAnnualTotal(199);
+  const whaleAnnual = getAnnualTotal(799);
+
+  const periods: { key: BillingPeriod; label: string; badge?: string }[] = [
+    { key: "monthly", label: "Monthly" },
+    { key: "quarterly", label: "Quarterly", badge: "≈10% off" },
+    { key: "yearly", label: "Yearly", badge: "≈25% off" },
+  ];
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -166,156 +111,152 @@ const Pricing = () => {
             </div>
           )}
           {trialExpired && (
-            <div className="mt-3 inline-block border border-terminal-red bg-terminal-red/10 px-3 py-1.5 text-xs font-bold text-terminal-red">
+            <div className="mt-3 inline-block border border-destructive bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive">
               Your 14-day trial has ended. Upgrade to keep your access.
             </div>
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mb-8 gap-4">
+        {/* Trial Banner */}
+        <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mb-8 gap-4">
           <div>
-            <h3 className="font-semibold text-sm text-foreground">
+            <h3 className="font-semibold text-sm text-zinc-50">
               Start with a 14-day free trial
             </h3>
-            <p className="font-mono text-xs text-muted-foreground mt-1">
-              Full Pro access. No credit card required. Expires automatically —
-              no surprise charges.
+            <p className="font-mono text-xs text-zinc-400 mt-1">
+              Full Pro access. No credit card required. Expires automatically — no surprise charges.
             </p>
           </div>
           <button
             onClick={() => navigate("/auth")}
-            className="bg-terminal-green text-primary-foreground hover:bg-terminal-green/90 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
+            className="bg-green-500 text-black hover:bg-green-400 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
           >
-            Start Free Trial
+            Start Free Trial →
           </button>
         </div>
 
         {/* Billing Toggle */}
         <div className="flex justify-center mb-6">
-          <div className="inline-flex border border-border bg-card">
-            {(["monthly", "quarterly", "yearly"] as BillingPeriod[]).map(
-              (p) => (
-                <button
-                  key={p}
-                  onClick={() => handlePeriodChange(p)}
-                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${
-                    period === p
-                      ? "bg-primary/20 text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {p}
-                  {PERIOD_SAVINGS[p] && (
-                    <span className="ml-1 text-[9px] text-terminal-green">
-                      {PERIOD_SAVINGS[p]}
-                    </span>
-                  )}
-                </button>
-              )
-            )}
+          <div className="inline-flex border border-zinc-700 rounded-lg overflow-hidden">
+            {periods.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => handlePeriodChange(p.key)}
+                className={`px-4 py-2 font-mono text-xs transition-colors ${
+                  period === p.key
+                    ? "bg-zinc-800 text-zinc-50"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {p.label}
+                {p.badge && (
+                  <span className="text-[10px] text-green-400 ml-1">{p.badge}</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Plan Cards — 2 columns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          {plans.map((plan) => {
-            const isCurrent = plan.tier === currentTier;
-            const showMonthlyEquiv =
-              period !== "monthly" && plan.monthlyEquiv !== plan.price;
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          {/* PRO Card */}
+          <div className="border border-zinc-700 bg-card rounded-lg p-5 flex flex-col">
+            <span className="font-mono text-xs text-zinc-400 tracking-widest">PRO</span>
+            <p className="text-xs text-zinc-500 mt-0.5">Operator tier</p>
+            <div className="flex items-baseline gap-1 mt-3">
+              <span className="font-mono text-3xl font-bold text-foreground">{proPrice.display}</span>
+              <span className="text-xs text-zinc-400">{proPrice.sub}</span>
+            </div>
+            {period === "yearly" && (
+              <p className="text-xs text-zinc-500 font-mono mt-1">
+                Billed as {proAnnual.total}/yr — save {proAnnual.savings}
+              </p>
+            )}
 
-            return (
-              <div
-                key={plan.tier}
-                className={`border bg-card p-5 flex flex-col ${
-                  plan.popular ? "border-primary" : "border-border"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="mb-2 inline-block self-start border border-primary bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
-                    Most Popular
-                  </div>
-                )}
-                <h2 className="font-serif text-lg font-bold text-foreground">
-                  {plan.name}
-                </h2>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-                  {plan.tagline}
-                </p>
-                <div className="flex items-baseline gap-1">
-                  <span className="font-data text-3xl font-bold text-primary">
-                    ${plan.price.toLocaleString()}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {PERIOD_LABELS[period]}
-                  </span>
+            <div className="mt-4 flex-1 space-y-2">
+              {[
+                "Full Whale Flows (real-time + historical)",
+                "Liquidation Heatmap — full depth",
+                "Network Health + DePIN Tracker",
+                "AI Market Briefs (daily + on-demand)",
+                "Data Room access",
+                "CSV Export",
+                "Priority support",
+              ].map((f) => (
+                <div key={f} className="flex items-start gap-2 text-xs text-zinc-300">
+                  <Zap className="h-3 w-3 text-green-500 flex-shrink-0 mt-0.5" />
+                  {f}
                 </div>
-                {showMonthlyEquiv && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    ${plan.monthlyEquiv}/mo, billed{" "}
-                    {period === "quarterly" ? "quarterly" : "annually"}
-                  </p>
-                )}
+              ))}
+            </div>
 
-                <div className="mt-4 flex-1 space-y-2">
-                  {plan.features.map((f) => (
-                    <div
-                      key={f}
-                      className="flex items-start gap-2 text-xs text-foreground"
-                    >
-                      <Check className="h-3 w-3 text-terminal-green flex-shrink-0 mt-0.5" />
-                      {f}
-                    </div>
-                  ))}
-                  {plan.locked.map((f) => (
-                    <div
-                      key={f}
-                      className="flex items-start gap-2 text-xs text-muted-foreground"
-                    >
-                      <Lock className="h-3 w-3 flex-shrink-0 mt-0.5" />
-                      {f}
-                    </div>
-                  ))}
+            <button
+              onClick={() => (user ? handleUpgrade("pro") : navigate("/auth"))}
+              disabled={currentTier === "pro"}
+              className={`w-full mt-6 py-2.5 font-mono text-xs rounded transition-colors ${
+                currentTier === "pro"
+                  ? "border border-zinc-700 text-zinc-500 cursor-default"
+                  : "bg-zinc-100 text-black hover:bg-zinc-200"
+              }`}
+            >
+              {currentTier === "pro" ? "CURRENT PLAN" : "Start Free Trial → Pro"}
+            </button>
+            {currentTier !== "pro" && (
+              <p className="font-mono text-[10px] text-zinc-500 text-center mt-2">
+                14 days free, then {getPrice(199, "monthly").display}/mo. Cancel anytime.
+              </p>
+            )}
+          </div>
+
+          {/* WHALE Card */}
+          <div className="relative border border-green-500/40 bg-card rounded-lg p-5 flex flex-col">
+            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 font-mono text-[9px] px-3 py-0.5 whitespace-nowrap">
+              INSTITUTIONAL
+            </span>
+            <span className="font-mono text-xs text-green-400 tracking-widest mt-1">WHALE</span>
+            <p className="text-xs text-zinc-500 mt-0.5">Institutional tier</p>
+            <div className="flex items-baseline gap-1 mt-3">
+              <span className="font-mono text-3xl font-bold text-foreground">{whalePrice.display}</span>
+              <span className="text-xs text-zinc-400">{whalePrice.sub}</span>
+            </div>
+            {period === "yearly" && (
+              <p className="text-xs text-zinc-500 font-mono mt-1">
+                Billed as {whaleAnnual.total}/yr — save {whaleAnnual.savings}
+              </p>
+            )}
+
+            <div className="mt-4 flex-1 space-y-2">
+              {[
+                "Everything in Pro",
+                "Advanced alerts (multi-condition, webhook/email)",
+                "API access (read-only endpoints)",
+                "White-glove onboarding",
+                "Priority support + direct analyst channel",
+                "Higher rate limits",
+              ].map((f) => (
+                <div key={f} className="flex items-start gap-2 text-xs text-zinc-300">
+                  <Zap className="h-3 w-3 text-green-500 flex-shrink-0 mt-0.5" />
+                  {f}
                 </div>
+              ))}
+            </div>
 
-                {plan.justification && (
-                  <div className="mt-3 border-t border-border pt-3">
-                    <p className="text-[10px] text-muted-foreground italic leading-relaxed">
-                      {plan.justification}
-                    </p>
-                  </div>
-                )}
-
-                {/* CTA */}
-                <div className="mt-4">
-                  <button
-                    onClick={() => handleUpgrade(plan.tier)}
-                    disabled={isCurrent}
-                    className={`w-full border py-2.5 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      isCurrent
-                        ? "border-border text-muted-foreground cursor-default"
-                        : "border-primary bg-primary/10 text-primary hover:bg-primary/20"
-                    }`}
-                  >
-                    {isCurrent
-                      ? "CURRENT PLAN"
-                      : plan.isTrial
-                        ? "Start Free Trial → Pro"
-                        : `UPGRADE TO WHALE — $${plan.price.toLocaleString()}${PERIOD_LABELS[period]}`}
-                  </button>
-                  {plan.isTrial && !isCurrent && (
-                    <p className="font-mono text-[10px] text-muted-foreground text-center mt-1.5">
-                      14 days free, then ${MONTHLY_EQUIV.pro.monthly}/mo. Cancel
-                      anytime.
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+            <button
+              onClick={() => handleUpgrade("whale")}
+              disabled={currentTier === "whale"}
+              className={`w-full mt-6 py-2.5 font-mono text-xs rounded transition-colors ${
+                currentTier === "whale"
+                  ? "border border-zinc-700 text-zinc-500 cursor-default"
+                  : "bg-green-500 text-black hover:bg-green-400"
+              }`}
+            >
+              {currentTier === "whale" ? "CURRENT PLAN" : "Upgrade to Whale"}
+            </button>
+          </div>
         </div>
 
         {/* Feature Request Section */}
-        <div className="mt-8 border border-border bg-card p-5">
+        <div className="mt-8 border border-border bg-card p-5 max-w-4xl mx-auto rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
               Request a Feature
@@ -351,39 +292,33 @@ const Pricing = () => {
           {showRequestForm && isPaidUser && (
             <form onSubmit={submitRequest} className="space-y-3">
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Title *
-                </label>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Title *</label>
                 <input
                   value={reqTitle}
                   onChange={(e) => setReqTitle(e.target.value)}
                   required
                   maxLength={100}
-                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-data text-foreground"
+                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-mono text-foreground rounded"
                   placeholder="e.g., Add SOL staking analytics"
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Description
-                </label>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Description</label>
                 <textarea
                   value={reqDesc}
                   onChange={(e) => setReqDesc(e.target.value)}
                   rows={3}
                   maxLength={1000}
-                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-data text-foreground resize-none"
+                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-mono text-foreground resize-none rounded"
                   placeholder="Describe what you'd like to see..."
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Priority
-                </label>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Priority</label>
                 <select
                   value={reqPriority}
                   onChange={(e) => setReqPriority(e.target.value)}
-                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-data text-foreground"
+                  className="mt-1 w-full border border-border bg-background px-2 py-1.5 text-xs font-mono text-foreground rounded"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -393,11 +328,9 @@ const Pricing = () => {
               <button
                 type="submit"
                 disabled={reqSubmitting || !reqTitle.trim()}
-                className="flex items-center gap-1 border border-primary bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1 border border-primary bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors rounded"
               >
-                {reqSubmitting ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : null}
+                {reqSubmitting && <Loader2 className="h-3 w-3 animate-spin" />}
                 Submit Request
               </button>
             </form>
@@ -406,8 +339,7 @@ const Pricing = () => {
 
         <div className="mt-6 text-center">
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-            All plans include AES-256 encryption ◆ 99.9% uptime SLA ◆ Secure
-            PayPal checkout
+            All plans include AES-256 encryption ◆ 99.9% uptime SLA ◆ Secure PayPal checkout
           </p>
         </div>
       </div>
