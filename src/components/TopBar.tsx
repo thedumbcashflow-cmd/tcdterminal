@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, LogOut, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useNavigate } from "react-router-dom";
 
 const SEARCHABLE_ITEMS = [
