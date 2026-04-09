@@ -51,17 +51,20 @@ const Auth = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    const { error } = await lovable.auth.signInWithOAuth("google", {
+  const handleOAuthSignIn = async (provider: "google" | "apple") => {
+    const result = await lovable.auth.signInWithOAuth(provider, {
       redirect_uri: window.location.origin,
     });
-    if (error) {
+    if (result.error) {
       toast({
         title: "OAUTH ERROR",
-        description: String(error),
+        description: String(result.error),
         variant: "destructive",
       });
+      return;
     }
+    if (result.redirected) return;
+    navigate("/dashboard");
   };
 
   return (
@@ -144,13 +147,19 @@ const Auth = () => {
           <div className="h-px flex-1 bg-border" />
         </div>
 
-        {/* Google OAuth */}
-        <div className="px-6 py-4">
+        {/* OAuth Providers */}
+        <div className="space-y-2 px-6 py-4">
           <button
-            onClick={handleGoogleSignIn}
+            onClick={() => handleOAuthSignIn("google")}
             className="w-full border border-border py-2 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             Continue with Google
+          </button>
+          <button
+            onClick={() => handleOAuthSignIn("apple")}
+            className="w-full border border-border py-2 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+          >
+            Continue with Apple
           </button>
         </div>
 
