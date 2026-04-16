@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
@@ -51,21 +50,6 @@ const Auth = () => {
     }
   };
 
-  const handleOAuthSignIn = async (provider: "google" | "apple") => {
-    const result = await lovable.auth.signInWithOAuth(provider, {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast({
-        title: "OAUTH ERROR",
-        description: String(result.error),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (result.redirected) return;
-    navigate("/dashboard");
-  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -140,28 +124,6 @@ const Auth = () => {
           </button>
         </form>
 
-        {/* Divider */}
-        <div className="flex items-center gap-3 px-6">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-[10px] text-muted-foreground">OR</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        {/* OAuth Providers */}
-        <div className="space-y-2 px-6 py-4">
-          <button
-            onClick={() => handleOAuthSignIn("google")}
-            className="w-full border border-border py-2 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-          >
-            Continue with Google
-          </button>
-          <button
-            onClick={() => handleOAuthSignIn("apple")}
-            className="w-full border border-border py-2 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-          >
-            Continue with Apple
-          </button>
-        </div>
 
         {/* Footer */}
         <div className="border-t border-border px-6 py-3 text-center">
