@@ -10,28 +10,69 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Authenticate the caller
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+
     const { messages } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Fetch recent market intel for context
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Use service role to fetch market intel context
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: whaleFlows } = await supabase
+    // Check user's subscription tier to decide premium data access
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("subscription_tier")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const isPaid = profile?.subscription_tier === "pro" || profile?.subscription_tier === "whale";
+
+    // Build whale flows query — restrict premium data for free users
+    let whaleQuery = supabase
       .from("market_intel")
       .select("*")
       .eq("intel_type", "whale_flow")
       .order("created_at", { ascending: false })
       .limit(20);
+    if (!isPaid) {
+      whaleQuery = whaleQuery.eq("is_premium", false);
+    }
+    const { data: whaleFlows } = await whaleQuery;
 
-    const { data: liquidations } = await supabase
+    let liqQuery = supabase
       .from("market_intel")
       .select("*")
       .eq("intel_type", "liquidation")
       .order("created_at", { ascending: false })
       .limit(20);
+    if (!isPaid) {
+      liqQuery = liqQuery.eq("is_premium", false);
+    }
+    const { data: liquidations } = await liqQuery;
 
     const whaleContext = whaleFlows?.length
       ? whaleFlows.map(w => `${w.asset_symbol}: $${w.value_usd?.toLocaleString()} ${w.flow_type} by ${w.wallet_label} (score: ${w.whale_flow_score})`).join("\n")
