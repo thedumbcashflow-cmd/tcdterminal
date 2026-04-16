@@ -12,6 +12,12 @@ const PERIOD_MONTHS: Record<string, number> = {
   yearly: 12,
 };
 
+// Expected prices must match create-checkout PRICING
+const PRICING: Record<string, Record<string, number>> = {
+  pro: { monthly: 199, quarterly: 549, yearly: 1999 },
+  whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -20,10 +26,10 @@ serve(async (req) => {
     const event = body.event;
 
     if (event === "paypal.capture") {
-      const { order_id, plan, period = "monthly" } = body;
+      const { order_id } = body;
 
-      if (!order_id || !plan) {
-        return new Response(JSON.stringify({ error: "Missing order_id or plan" }), {
+      if (!order_id) {
+        return new Response(JSON.stringify({ error: "Missing order_id" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -42,7 +48,7 @@ serve(async (req) => {
       });
       const tokenData = await tokenResp.json();
 
-      const captureResp = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${order_id}/capture`, {
+      const captureResp = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${encodeURIComponent(order_id)}/capture`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
@@ -58,35 +64,51 @@ serve(async (req) => {
         });
       }
 
-      // Extract user_id from custom_id
+      // Extract plan, period, and user_id from custom_id set at order creation time — NEVER from request body
+      const purchaseUnit = captureData.purchase_units?.[0];
+      const customId = purchaseUnit?.payments?.captures?.[0]?.custom_id || purchaseUnit?.custom_id;
+
+      if (!customId) {
+        return new Response(JSON.stringify({ error: "Missing custom_id in PayPal order" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       let userId = "";
+      let plan = "";
+      let period = "monthly";
       try {
-        const purchaseUnit = captureData.purchase_units?.[0];
-        const customId = purchaseUnit?.payments?.captures?.[0]?.custom_id || purchaseUnit?.custom_id;
-        if (customId) {
-          const parsed = JSON.parse(customId);
-          userId = parsed.user_id;
-        }
+        const parsed = JSON.parse(customId);
+        userId = parsed.user_id;
+        plan = parsed.plan;
+        period = parsed.period || "monthly";
       } catch {
-        // fallback: get from auth header
+        return new Response(JSON.stringify({ error: "Invalid custom_id format" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      // Fallback: get user from auth header
-      if (!userId) {
-        const authHeader = req.headers.get("Authorization");
-        if (authHeader) {
-          const supabaseAuth = createClient(
-            Deno.env.get("SUPABASE_URL")!,
-            Deno.env.get("SUPABASE_ANON_KEY")!,
-            { global: { headers: { Authorization: authHeader } } }
-          );
-          const { data: { user } } = await supabaseAuth.auth.getUser();
-          if (user) userId = user.id;
-        }
+      if (!userId || !plan) {
+        return new Response(JSON.stringify({ error: "Missing user_id or plan in custom_id" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      if (!userId) {
-        return new Response(JSON.stringify({ error: "Could not identify user" }), {
+      // Validate plan is a known tier
+      if (!PRICING[plan] || !PRICING[plan][period]) {
+        return new Response(JSON.stringify({ error: "Invalid plan or period in custom_id" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify the captured amount matches the expected price
+      const capturedAmount = parseFloat(
+        purchaseUnit?.payments?.captures?.[0]?.amount?.value || "0"
+      );
+      const expectedAmount = PRICING[plan][period];
+      if (capturedAmount !== expectedAmount) {
+        console.error(`Amount mismatch: captured ${capturedAmount}, expected ${expectedAmount} for ${plan}/${period}`);
+        return new Response(JSON.stringify({ error: "Payment amount mismatch" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -127,7 +149,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("payment-webhook error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+    return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
