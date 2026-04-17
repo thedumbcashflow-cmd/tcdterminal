@@ -8,6 +8,7 @@ type SubscriptionTier = Database["public"]["Enums"]["subscription_tier"];
 interface SubscriptionState {
   tier: SubscriptionTier;
   isAdmin: boolean;
+  isModerator: boolean;
   loading: boolean;
   isPro: boolean;
   isWhale: boolean;
@@ -16,7 +17,7 @@ interface SubscriptionState {
 }
 
 // Shared cache to prevent duplicate calls across components
-let cachedResult: { userId: string; tier: SubscriptionTier; isAdmin: boolean; displayName: string | null; timezone: string } | null = null;
+let cachedResult: { userId: string; tier: SubscriptionTier; isAdmin: boolean; isModerator: boolean; displayName: string | null; timezone: string } | null = null;
 let cachePromise: Promise<void> | null = null;
 
 export const useSubscriptionTier = (): SubscriptionState => {
