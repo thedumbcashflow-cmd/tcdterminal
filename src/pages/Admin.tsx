@@ -60,11 +60,12 @@ const Admin = () => {
     if (authLoading) return;
     if (!user) { navigate("/auth"); return; }
     const checkAdmin = async () => {
-      const [{ data: roleData }, { data: profileData }] = await Promise.all([
+      const [{ data: adminRole }, { data: modRole }, { data: profileData }] = await Promise.all([
         supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: user.id, _role: "moderator" }),
         supabase.from("profiles").select("subscription_tier").eq("id", user.id).single(),
       ]);
-      setIsAdmin(!!roleData);
+      setIsAdmin(!!adminRole || !!modRole);
       setAdminTier(profileData?.subscription_tier || "free");
       setChecking(false);
     };
