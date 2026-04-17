@@ -134,7 +134,7 @@ const TvlChart = ({ data }: { data: Array<{ date: number; tvl: number }> }) => {
 const DataRoom = () => {
   const navigate = useNavigate();
   const { isPro, loading: subLoading } = useSubscriptionTier();
-  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh } = useDataRoom();
+  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh, retryPanel } = useDataRoom();
 
   // Locked state for non-pro users
   if (subLoading) {
