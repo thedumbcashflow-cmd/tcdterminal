@@ -8,6 +8,7 @@ type SubscriptionTier = Database["public"]["Enums"]["subscription_tier"];
 interface SubscriptionState {
   tier: SubscriptionTier;
   isAdmin: boolean;
+  isModerator: boolean;
   loading: boolean;
   isPro: boolean;
   isWhale: boolean;
@@ -16,7 +17,7 @@ interface SubscriptionState {
 }
 
 // Shared cache to prevent duplicate calls across components
-let cachedResult: { userId: string; tier: SubscriptionTier; isAdmin: boolean; displayName: string | null; timezone: string } | null = null;
+let cachedResult: { userId: string; tier: SubscriptionTier; isAdmin: boolean; isModerator: boolean; displayName: string | null; timezone: string } | null = null;
 let cachePromise: Promise<void> | null = null;
 
 export const useSubscriptionTier = (): SubscriptionState => {
@@ -24,6 +25,7 @@ export const useSubscriptionTier = (): SubscriptionState => {
   const hasCachedMatch = cachedResult != null && user != null && cachedResult.userId === user.id;
   const [tier, setTier] = useState<SubscriptionTier>(hasCachedMatch ? cachedResult.tier : "free");
   const [isAdmin, setIsAdmin] = useState(hasCachedMatch ? cachedResult.isAdmin : false);
+  const [isModerator, setIsModerator] = useState(hasCachedMatch ? cachedResult.isModerator : false);
   const [displayName, setDisplayName] = useState<string | null>(hasCachedMatch ? cachedResult.displayName : null);
   const [timezone, setTimezone] = useState(hasCachedMatch ? cachedResult.timezone : "UTC");
   const [loading, setLoading] = useState(!hasCachedMatch);
@@ -32,6 +34,7 @@ export const useSubscriptionTier = (): SubscriptionState => {
     if (!user) {
       setTier("free");
       setIsAdmin(false);
+      setIsModerator(false);
       setDisplayName(null);
       setTimezone("UTC");
       setLoading(false);
@@ -39,10 +42,10 @@ export const useSubscriptionTier = (): SubscriptionState => {
       return;
     }
 
-    // Use cache if available for same user
     if (cachedResult && cachedResult.userId === user.id) {
       setTier(cachedResult.tier);
       setIsAdmin(cachedResult.isAdmin);
+      setIsModerator(cachedResult.isModerator);
       setDisplayName(cachedResult.displayName);
       setTimezone(cachedResult.timezone);
       setLoading(false);
@@ -50,12 +53,12 @@ export const useSubscriptionTier = (): SubscriptionState => {
     }
 
     const fetchData = async () => {
-      // Deduplicate in-flight requests
       if (cachePromise) {
         await cachePromise;
         if (cachedResult && cachedResult.userId === user.id) {
           setTier(cachedResult.tier);
           setIsAdmin(cachedResult.isAdmin);
+          setIsModerator(cachedResult.isModerator);
           setDisplayName(cachedResult.displayName);
           setTimezone(cachedResult.timezone);
           setLoading(false);
@@ -66,19 +69,22 @@ export const useSubscriptionTier = (): SubscriptionState => {
       let resolve: () => void;
       cachePromise = new Promise<void>((r) => { resolve = r; });
 
-      const [{ data: profileData }, { data: roleData }] = await Promise.all([
+      const [{ data: profileData }, { data: adminData }, { data: modData }] = await Promise.all([
         supabase.from("profiles").select("subscription_tier, display_name, timezone, username").eq("id", user.id).single(),
         supabase.rpc("has_role", { _user_id: user.id, _role: "admin" }),
+        supabase.rpc("has_role", { _user_id: user.id, _role: "moderator" }),
       ]);
 
       const t = profileData?.subscription_tier || "free";
-      const admin = !!roleData;
+      const admin = !!adminData;
+      const mod = !!modData;
       const dn = profileData?.display_name || profileData?.username || null;
       const tz = profileData?.timezone || "UTC";
 
-      cachedResult = { userId: user.id, tier: t, isAdmin: admin, displayName: dn, timezone: tz };
+      cachedResult = { userId: user.id, tier: t, isAdmin: admin, isModerator: mod, displayName: dn, timezone: tz };
       setTier(t);
       setIsAdmin(admin);
+      setIsModerator(mod);
       setDisplayName(dn);
       setTimezone(tz);
       setLoading(false);
@@ -93,11 +99,12 @@ export const useSubscriptionTier = (): SubscriptionState => {
     tier,
     loading,
     isAdmin,
+    isModerator,
     displayName,
     timezone,
     isPro: isAdmin || tier === "pro" || tier === "whale",
     isWhale: isAdmin || tier === "whale",
-  }), [tier, loading, isAdmin, displayName, timezone]);
+  }), [tier, loading, isAdmin, isModerator, displayName, timezone]);
 };
 
 // Export cache invalidator for settings changes

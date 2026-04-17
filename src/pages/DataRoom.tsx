@@ -8,20 +8,35 @@ import { formatTvl } from "@/services/defiLlama";
 import { Lock, RefreshCw } from "lucide-react";
 
 // ── Skeleton rows ──
-const SkeletonRows = () => (
-  <div className="space-y-3">
-    {[1, 2, 3].map(i => (
-      <div key={i} className="bg-zinc-800 animate-pulse rounded h-4 w-full" />
-    ))}
-  </div>
-);
+function SkeletonRows() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="bg-zinc-800 animate-pulse rounded h-4 w-full" />
+      ))}
+    </div>
+  );
+}
 
-const ErrorPanel = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <div className="font-mono text-xs text-red-400">
-    Failed to load — {message}.{" "}
-    <button onClick={onRetry} className="underline hover:text-red-300">Retry ↺</button>
-  </div>
-);
+function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
+  // Translate common errors into actionable copy
+  let label = message;
+  if (/429/.test(message)) label = "Rate limited (HTTP 429). Try again in a moment.";
+  else if (/404/.test(message)) label = "Endpoint not found (HTTP 404).";
+  else if (/Failed to fetch|NetworkError/i.test(message)) label = "Network error reaching upstream provider.";
+  else if (/502/.test(message)) label = "Upstream gateway error (HTTP 502).";
+  return (
+    <div className="font-mono text-xs text-red-400 flex items-center gap-2">
+      <span>Failed to load — {label}</span>
+      <button
+        onClick={onRetry}
+        className="border border-red-500/40 text-red-300 px-2 py-0.5 rounded hover:bg-red-500/10 transition-colors"
+      >
+        Retry ↺
+      </button>
+    </div>
+  );
+}
 
 // ── Format helpers ──
 function fmtChange(v: number | null) {
@@ -119,7 +134,7 @@ const TvlChart = ({ data }: { data: Array<{ date: number; tvl: number }> }) => {
 const DataRoom = () => {
   const navigate = useNavigate();
   const { isPro, loading: subLoading } = useSubscriptionTier();
-  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh } = useDataRoom();
+  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh, retryPanel } = useDataRoom();
 
   // Locked state for non-pro users
   if (subLoading) {
@@ -201,7 +216,7 @@ const DataRoom = () => {
               {/* TVL Chart */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">SOLANA TVL — 90 DAYS</h3>
-                {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={refresh} /> : (
+                {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={() => retryPanel("tvl")} /> : (
                   <>
                     <TvlChart data={tvlHistory} />
                     <div className="flex gap-6 mt-3">
@@ -221,7 +236,7 @@ const DataRoom = () => {
               {/* Top Protocols */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA PROTOCOLS — TVL</h3>
-                {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={refresh} /> : (
+                {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={() => retryPanel("protocols")} /> : (
                   <table className="w-full">
                     <thead>
                       <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
@@ -262,7 +277,7 @@ const DataRoom = () => {
               {/* Bar chart */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">DEX VOLUME — 24H BY PROTOCOL</h3>
-                {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={refresh} /> : dexVolumes && (
+                {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={() => retryPanel("dex")} /> : dexVolumes && (
                   <>
                     <div className="mb-4 flex items-baseline gap-2">
                       <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(dexVolumes.totalDailyVolume)}</span>
@@ -295,7 +310,7 @@ const DataRoom = () => {
               {/* Top Pools */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA POOLS — 24H VOLUME</h3>
-                {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={refresh} /> : (
+                {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={() => retryPanel("pools")} /> : (
                   <table className="w-full">
                     <thead>
                       <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
@@ -329,7 +344,7 @@ const DataRoom = () => {
               {/* Revenue Table */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">PROTOCOL REVENUE — SOLANA</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={refresh} /> : revenueData && (
+                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
                   <>
                     <div className="mb-4 flex items-baseline gap-2">
                       <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
@@ -373,7 +388,7 @@ const DataRoom = () => {
               {/* Revenue/Fees Ratio Bars */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">REVENUE / FEES RATIO — TOP 8</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={refresh} /> : revenueData && (
+                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
                   <>
                     <div className="space-y-3">
                       {revenueData.protocols.slice(0, 8).map(p => {
