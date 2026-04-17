@@ -8,20 +8,35 @@ import { formatTvl } from "@/services/defiLlama";
 import { Lock, RefreshCw } from "lucide-react";
 
 // ── Skeleton rows ──
-const SkeletonRows = () => (
-  <div className="space-y-3">
-    {[1, 2, 3].map(i => (
-      <div key={i} className="bg-zinc-800 animate-pulse rounded h-4 w-full" />
-    ))}
-  </div>
-);
+function SkeletonRows() {
+  return (
+    <div className="space-y-3">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="bg-zinc-800 animate-pulse rounded h-4 w-full" />
+      ))}
+    </div>
+  );
+}
 
-const ErrorPanel = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
-  <div className="font-mono text-xs text-red-400">
-    Failed to load — {message}.{" "}
-    <button onClick={onRetry} className="underline hover:text-red-300">Retry ↺</button>
-  </div>
-);
+function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
+  // Translate common errors into actionable copy
+  let label = message;
+  if (/429/.test(message)) label = "Rate limited (HTTP 429). Try again in a moment.";
+  else if (/404/.test(message)) label = "Endpoint not found (HTTP 404).";
+  else if (/Failed to fetch|NetworkError/i.test(message)) label = "Network error reaching upstream provider.";
+  else if (/502/.test(message)) label = "Upstream gateway error (HTTP 502).";
+  return (
+    <div className="font-mono text-xs text-red-400 flex items-center gap-2">
+      <span>Failed to load — {label}</span>
+      <button
+        onClick={onRetry}
+        className="border border-red-500/40 text-red-300 px-2 py-0.5 rounded hover:bg-red-500/10 transition-colors"
+      >
+        Retry ↺
+      </button>
+    </div>
+  );
+}
 
 // ── Format helpers ──
 function fmtChange(v: number | null) {

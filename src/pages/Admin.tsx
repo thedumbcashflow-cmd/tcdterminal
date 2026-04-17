@@ -26,6 +26,7 @@ const Admin = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
+  const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
   // New record form
   const [newAsset, setNewAsset] = useState("SOL");
@@ -66,6 +67,7 @@ const Admin = () => {
         supabase.from("profiles").select("subscription_tier").eq("id", user.id).single(),
       ]);
       setIsAdmin(!!adminRole || !!modRole);
+      setRole(adminRole ? "admin" : modRole ? "moderator" : null);
       setAdminTier(profileData?.subscription_tier || "free");
       setChecking(false);
     };
@@ -214,6 +216,16 @@ const Admin = () => {
           </button>
           <Shield className="h-4 w-4 text-primary" />
           <h1 className="font-serif text-sm font-bold text-primary uppercase tracking-wider">TCD Admin Console</h1>
+          {role === "admin" && (
+            <span className="font-data text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-indigo-500/40 bg-indigo-500/10 text-indigo-300">
+              Admin
+            </span>
+          )}
+          {role === "moderator" && (
+            <span className="font-data text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-300">
+              Moderator
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-data">
           <span>Last refresh: {format(lastRefresh, "HH:mm:ss")}</span>
