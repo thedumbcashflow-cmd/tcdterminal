@@ -216,7 +216,7 @@ const DataRoom = () => {
               {/* TVL Chart */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">SOLANA TVL — 90 DAYS</h3>
-                {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={refresh} /> : (
+                {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={() => retryPanel("tvl")} /> : (
                   <>
                     <TvlChart data={tvlHistory} />
                     <div className="flex gap-6 mt-3">
@@ -236,7 +236,7 @@ const DataRoom = () => {
               {/* Top Protocols */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA PROTOCOLS — TVL</h3>
-                {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={refresh} /> : (
+                {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={() => retryPanel("protocols")} /> : (
                   <table className="w-full">
                     <thead>
                       <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
@@ -277,7 +277,7 @@ const DataRoom = () => {
               {/* Bar chart */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">DEX VOLUME — 24H BY PROTOCOL</h3>
-                {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={refresh} /> : dexVolumes && (
+                {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={() => retryPanel("dex")} /> : dexVolumes && (
                   <>
                     <div className="mb-4 flex items-baseline gap-2">
                       <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(dexVolumes.totalDailyVolume)}</span>
@@ -310,7 +310,7 @@ const DataRoom = () => {
               {/* Top Pools */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA POOLS — 24H VOLUME</h3>
-                {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={refresh} /> : (
+                {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={() => retryPanel("pools")} /> : (
                   <table className="w-full">
                     <thead>
                       <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
@@ -344,7 +344,7 @@ const DataRoom = () => {
               {/* Revenue Table */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">PROTOCOL REVENUE — SOLANA</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={refresh} /> : revenueData && (
+                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
                   <>
                     <div className="mb-4 flex items-baseline gap-2">
                       <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
@@ -388,7 +388,7 @@ const DataRoom = () => {
               {/* Revenue/Fees Ratio Bars */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">REVENUE / FEES RATIO — TOP 8</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={refresh} /> : revenueData && (
+                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
                   <>
                     <div className="space-y-3">
                       {revenueData.protocols.slice(0, 8).map(p => {
