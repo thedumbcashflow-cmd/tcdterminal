@@ -1,10 +1,28 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
+
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  // Webhook callers (PayPal) typically have no Origin header — allow them.
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
 
 const PERIOD_MONTHS: Record<string, number> = {
   monthly: 1,
@@ -12,14 +30,22 @@ const PERIOD_MONTHS: Record<string, number> = {
   yearly: 12,
 };
 
-// Expected prices must match create-checkout PRICING
 const PRICING: Record<string, Record<string, number>> = {
   pro: { monthly: 199, quarterly: 549, yearly: 1999 },
   whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const body = await req.json();
@@ -30,11 +56,10 @@ serve(async (req) => {
 
       if (!order_id) {
         return new Response(JSON.stringify({ error: "Missing order_id" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
-      // Capture the PayPal order server-side
       const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
       const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
 
@@ -60,17 +85,16 @@ serve(async (req) => {
       if (captureData.status !== "COMPLETED") {
         console.error("PayPal capture not completed:", captureData);
         return new Response(JSON.stringify({ error: "Payment not completed", details: captureData.status }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
-      // Extract plan, period, and user_id from custom_id set at order creation time — NEVER from request body
       const purchaseUnit = captureData.purchase_units?.[0];
       const customId = purchaseUnit?.payments?.captures?.[0]?.custom_id || purchaseUnit?.custom_id;
 
       if (!customId) {
         return new Response(JSON.stringify({ error: "Missing custom_id in PayPal order" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
@@ -84,24 +108,22 @@ serve(async (req) => {
         period = parsed.period || "monthly";
       } catch {
         return new Response(JSON.stringify({ error: "Invalid custom_id format" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
       if (!userId || !plan) {
         return new Response(JSON.stringify({ error: "Missing user_id or plan in custom_id" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
-      // Validate plan is a known tier
       if (!PRICING[plan] || !PRICING[plan][period]) {
         return new Response(JSON.stringify({ error: "Invalid plan or period in custom_id" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
-      // Verify the captured amount matches the expected price
       const capturedAmount = parseFloat(
         purchaseUnit?.payments?.captures?.[0]?.amount?.value || "0"
       );
@@ -109,7 +131,7 @@ serve(async (req) => {
       if (capturedAmount !== expectedAmount) {
         console.error(`Amount mismatch: captured ${capturedAmount}, expected ${expectedAmount} for ${plan}/${period}`);
         return new Response(JSON.stringify({ error: "Payment amount mismatch" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 
@@ -118,12 +140,10 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
 
-      // Update subscription tier
       await supabaseAdmin.from("profiles").update({
         subscription_tier: plan,
       }).eq("id", userId);
 
-      // Upsert subscriptions record
       const months = PERIOD_MONTHS[period] || 1;
       const periodEnd = new Date();
       periodEnd.setMonth(periodEnd.getMonth() + months);
@@ -140,17 +160,17 @@ serve(async (req) => {
       console.log(`Upgraded user ${userId} to ${plan} (${period})`);
 
       return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify({ received: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("payment-webhook error:", e);
     return new Response(JSON.stringify({ error: "Internal error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   }
 });

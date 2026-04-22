@@ -1,13 +1,29 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
-// In-memory cache
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
+
 let cache: { data: any; ts: number } | null = null;
-const CACHE_TTL_MS = 60_000; // 60s
+const CACHE_TTL_MS = 60_000;
 
 async function fetchFearGreed() {
   try {
@@ -31,13 +47,11 @@ async function fetchBtcDominance() {
 }
 
 async function fetchDxyProxy() {
-  // Use a free proxy: DXY approximate from exchangerate. We'll use EUR/USD inverse as rough proxy.
   try {
     const res = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(3000) });
     const json = await res.json();
     const eurRate = json?.rates?.EUR;
     if (!eurRate) return null;
-    // Rough DXY proxy: inverse of EUR/USD scaled. Real DXY ≈ 100 when EUR/USD ≈ 1.08
     const dxyApprox = (1 / eurRate) * 108;
     return { value: Number(dxyApprox.toFixed(1)), label: "USD Index (proxy)", source: "er-api.com" };
   } catch {
@@ -46,12 +60,20 @@ async function fetchDxyProxy() {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
 
   try {
-    // Serve from cache if fresh
     if (cache && Date.now() - cache.ts < CACHE_TTL_MS) {
-      return new Response(JSON.stringify(cache.data), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(cache.data), { headers: { ...cors.headers, "Content-Type": "application/json" } });
     }
 
     const [fng, btcDom, dxy] = await Promise.allSettled([
@@ -75,12 +97,12 @@ Deno.serve(async (req) => {
     cache = { data: snapshot, ts: Date.now() };
 
     return new Response(JSON.stringify(snapshot), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   }
 });

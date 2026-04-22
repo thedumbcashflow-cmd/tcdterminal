@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import TerminalCard from "@/components/TerminalCard";
 import { format } from "date-fns";
-import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock, FlaskConical } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import TierPreview from "@/components/admin/TierPreview";
 
 type MarketIntel = Tables<"market_intel">;
 
@@ -24,7 +25,7 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
   const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
@@ -237,11 +238,19 @@ const Admin = () => {
 
       {/* Tabs */}
       <div className="border-b border-border flex overflow-x-auto">
-        {(["data", "roles", "requests", "monitoring"] as const).map((tab) => (
+        {(
+          [
+            "data",
+            "roles",
+            "requests",
+            "monitoring",
+            ...(role === "admin" ? (["tier-preview"] as const) : []),
+          ] as const
+        ).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors whitespace-nowrap ${
+            className={`px-4 py-2 text-xs uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === tab ? "bg-primary/10 text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -249,6 +258,7 @@ const Admin = () => {
             {tab === "roles" && "User Roles"}
             {tab === "requests" && "Requests Queue"}
             {tab === "monitoring" && "Monitoring"}
+            {tab === "tier-preview" && (<><FlaskConical className="h-3 w-3" /> Tier Preview</>)}
           </button>
         ))}
       </div>
@@ -605,6 +615,11 @@ const Admin = () => {
               </div>
             </TerminalCard>
           </>
+        )}
+
+        {/* TIER PREVIEW TAB — admin only (extra defense-in-depth check) */}
+        {activeTab === "tier-preview" && role === "admin" && (
+          <TierPreview />
         )}
       </div>
     </div>
