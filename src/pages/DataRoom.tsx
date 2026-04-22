@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import TopBar from "@/components/TopBar";
 import TerminalSidebar from "@/components/TerminalSidebar";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useDataRoom } from "@/hooks/useDataRoom";
 import { formatTvl } from "@/services/defiLlama";
@@ -134,7 +135,7 @@ const TvlChart = ({ data }: { data: Array<{ date: number; tvl: number }> }) => {
 const DataRoom = () => {
   const navigate = useNavigate();
   const { isPro, loading: subLoading } = useSubscriptionTier();
-  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh, retryPanel } = useDataRoom();
+  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, lastSuccess, refresh, retryPanel } = useDataRoom();
 
   // Locked state for non-pro users
   if (subLoading) {
