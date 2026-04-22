@@ -353,86 +353,90 @@ const DataRoom = () => {
               {/* Revenue Table */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">PROTOCOL REVENUE — SOLANA</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
-                  <>
-                    <div className="mb-4 flex items-baseline gap-2">
-                      <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
-                      <span className="font-mono text-[10px] text-zinc-500">total protocol revenue today</span>
-                    </div>
-                    <table className="w-full">
-                      <thead>
-                        <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
-                          <th className="pb-2 text-left w-6">#</th>
-                          <th className="pb-2 text-left">Protocol</th>
-                          <th className="pb-2 text-left">Cat</th>
-                          <th className="pb-2 text-right">Daily Rev</th>
-                          <th className="pb-2 text-right">Fees</th>
-                          <th className="pb-2 text-right">Δ</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {revenueData.protocols.map((p, i) => (
-                          <tr key={p.name} className="border-b border-zinc-800/50 font-mono text-xs">
-                            <td className="py-1.5 text-zinc-500">{i + 1}</td>
-                            <td className="py-1.5 text-zinc-300 flex items-center gap-2">
-                              {p.logo ? (
-                                <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
-                              ) : (
-                                <div className="w-4 h-4 rounded-full bg-zinc-700" />
-                              )}
-                              {p.name}
-                            </td>
-                            <td className="py-1.5 text-zinc-500 text-[10px]">{p.category}</td>
-                            <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.dailyRevenue)}</td>
-                            <td className="py-1.5 text-zinc-400 text-right">{formatTvl(p.dailyFees)}</td>
-                            <td className="py-1.5 text-right">{fmtChange(p.change_1d)}</td>
+                <PanelErrorBoundary panelName="revenue" onRetry={() => retryPanel("revenue")} lastSuccessAt={lastSuccess.revenue}>
+                  {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
+                    <>
+                      <div className="mb-4 flex items-baseline gap-2">
+                        <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
+                        <span className="font-mono text-[10px] text-zinc-500">total protocol revenue today</span>
+                      </div>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
+                            <th className="pb-2 text-left w-6">#</th>
+                            <th className="pb-2 text-left">Protocol</th>
+                            <th className="pb-2 text-left">Cat</th>
+                            <th className="pb-2 text-right">Daily Rev</th>
+                            <th className="pb-2 text-right">Fees</th>
+                            <th className="pb-2 text-right">Δ</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
+                        </thead>
+                        <tbody>
+                          {revenueData.protocols.map((p, i) => (
+                            <tr key={p.name} className="border-b border-zinc-800/50 font-mono text-xs">
+                              <td className="py-1.5 text-zinc-500">{i + 1}</td>
+                              <td className="py-1.5 text-zinc-300 flex items-center gap-2">
+                                {p.logo ? (
+                                  <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full bg-zinc-700" />
+                                )}
+                                {p.name}
+                              </td>
+                              <td className="py-1.5 text-zinc-500 text-[10px]">{p.category}</td>
+                              <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.dailyRevenue)}</td>
+                              <td className="py-1.5 text-zinc-400 text-right">{formatTvl(p.dailyFees)}</td>
+                              <td className="py-1.5 text-right">{fmtChange(p.change_1d)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                </PanelErrorBoundary>
               </div>
 
               {/* Revenue/Fees Ratio Bars */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">REVENUE / FEES RATIO — TOP 8</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
-                  <>
-                    <div className="space-y-3">
-                      {revenueData.protocols.slice(0, 8).map(p => {
-                        const ratio = p.dailyFees > 0 ? Math.min(100, Math.round((p.dailyRevenue / p.dailyFees) * 100)) : 0;
-                        return (
-                          <div key={p.name} className="flex items-center gap-3">
-                            {p.logo ? (
-                              <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
-                            ) : (
-                              <div className="w-4 h-4 rounded-full bg-zinc-700 flex-shrink-0" />
-                            )}
-                            <span className="font-mono text-[10px] text-zinc-400 w-20 truncate">{p.name}</span>
-                            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                              {p.dailyFees > 0 ? (
-                                <>
-                                  <div className="bg-green-400 h-full" style={{ width: `${ratio}%` }} />
-                                  <div className="bg-zinc-600 h-full" style={{ width: `${100 - ratio}%` }} />
-                                </>
+                <PanelErrorBoundary panelName="revenue-ratio" onRetry={() => retryPanel("revenue")} lastSuccessAt={lastSuccess.revenue}>
+                  {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
+                    <>
+                      <div className="space-y-3">
+                        {revenueData.protocols.slice(0, 8).map(p => {
+                          const ratio = p.dailyFees > 0 ? Math.min(100, Math.round((p.dailyRevenue / p.dailyFees) * 100)) : 0;
+                          return (
+                            <div key={p.name} className="flex items-center gap-3">
+                              {p.logo ? (
+                                <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
                               ) : (
-                                <div className="bg-zinc-700 h-full w-full" />
+                                <div className="w-4 h-4 rounded-full bg-zinc-700 flex-shrink-0" />
                               )}
+                              <span className="font-mono text-[10px] text-zinc-400 w-20 truncate">{p.name}</span>
+                              <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
+                                {p.dailyFees > 0 ? (
+                                  <>
+                                    <div className="bg-green-400 h-full" style={{ width: `${ratio}%` }} />
+                                    <div className="bg-zinc-600 h-full" style={{ width: `${100 - ratio}%` }} />
+                                  </>
+                                ) : (
+                                  <div className="bg-zinc-700 h-full w-full" />
+                                )}
+                              </div>
+                              <span className="font-mono text-[9px] text-zinc-400 w-10 text-right">
+                                {p.dailyFees > 0 ? `${ratio}%` : "—"}
+                              </span>
                             </div>
-                            <span className="font-mono text-[9px] text-zinc-400 w-10 text-right">
-                              {p.dailyFees > 0 ? `${ratio}%` : "—"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="font-mono text-[9px] text-zinc-600 mt-4">
-                      Revenue = fees retained by protocol treasury. Fees = total paid by users.<br />
-                      Source: DeFiLlama open API — api.llama.fi
-                    </p>
-                  </>
-                )}
+                          );
+                        })}
+                      </div>
+                      <p className="font-mono text-[9px] text-zinc-600 mt-4">
+                        Revenue = fees retained by protocol treasury. Fees = total paid by users.<br />
+                        Source: DeFiLlama open API — api.llama.fi
+                      </p>
+                    </>
+                  )}
+                </PanelErrorBoundary>
               </div>
             </div>
           </div>
