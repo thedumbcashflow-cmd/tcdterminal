@@ -24,18 +24,35 @@ function corsFor(req: Request): { headers: Record<string, string>; allowed: bool
   return { headers: baseCors, allowed: false, origin };
 }
 
+function logCorsDenied(req: Request, origin: string | null) {
+  const url = new URL(req.url);
+  console.error(JSON.stringify({
+    event: "cors_denied",
+    origin,
+    path: url.pathname,
+    timestamp: new Date().toISOString(),
+    ip: req.headers.get("x-forwarded-for") ?? "unknown",
+  }));
+}
+
 serve(async (req) => {
   const cors = corsFor(req);
 
   try {
     if (req.method === "OPTIONS") {
-      if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+      if (!cors.allowed) {
+        logCorsDenied(req, cors.origin);
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { "Content-Type": "application/json" },
+        });
+      }
       return new Response("ok", { headers: cors.headers });
     }
     if (!cors.allowed) {
-      return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      logCorsDenied(req, cors.origin);
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
-        headers: { ...cors.headers, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
       });
     }
 
