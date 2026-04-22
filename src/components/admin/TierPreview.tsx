@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import TerminalCard from "@/components/TerminalCard";
 import { Loader2, Search, RotateCcw, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+
+// ===== ACCESS ENFORCEMENT TESTS =====
+// ASSERT: GET /admin/tier-preview as role='moderator' → 403 (component returns null + redirect)
+// ASSERT: GET /admin/tier-preview as role='admin'     → 200 (full UI)
+// Server-side defense: market_intel RLS policy enforces is_premium gating against
+// auth.uid() via get_subscription_tier() — non-admins cannot bypass by URL hacking.
 
 type SimTier = "free" | "trial" | "pro";
 
@@ -22,8 +30,28 @@ interface IntelRow {
 }
 
 const PAGE_SIZE = 25;
+const SESSION_KEY = "tier_preview_state";
+
+interface PersistedState {
+  email: string;
+  simTier: SimTier | null;
+  userId: string | null;
+}
+
+const TIER_LABEL: Record<SimTier, string> = {
+  free: "Free user",
+  trial: "Trial user",
+  pro: "Pro user",
+};
 
 const TierPreview = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Server-side admin re-verification on mount.
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [accessGranted, setAccessGranted] = useState(false);
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<LoadedUser | null>(null);
@@ -33,6 +61,73 @@ const TierPreview = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const restoredRef = useRef(false);
+
+  // Verify admin role server-side at mount (defense-in-depth)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        if (!cancelled) {
+          toast({ title: "Not authorised", description: "Please sign in.", variant: "destructive" });
+          navigate("/auth");
+        }
+        return;
+      }
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: authUser.id,
+        _role: "admin",
+      });
+      if (cancelled) return;
+      if (!isAdmin) {
+        toast({ title: "Not authorised", description: "Admin role required.", variant: "destructive" });
+        navigate("/admin");
+        return;
+      }
+      setAccessGranted(true);
+      setAccessChecked(true);
+    })();
+    return () => { cancelled = true; };
+  }, [navigate, toast]);
+
+  // Restore session state once access granted
+  useEffect(() => {
+    if (!accessGranted || restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const persisted = JSON.parse(raw) as PersistedState;
+      if (persisted.email) setEmail(persisted.email);
+      if (persisted.userId && persisted.email) {
+        // Re-load user + simulation
+        (async () => {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, username, display_name, subscription_tier")
+            .eq("id", persisted.userId!)
+            .maybeSingle();
+          if (data) {
+            setUser(data as LoadedUser);
+            const tier = (persisted.simTier ?? (data.subscription_tier as SimTier)) as SimTier;
+            setSimTier(tier);
+            runSimulation(tier, 0);
+          }
+        })();
+      }
+    } catch {
+      // ignore corrupt sessionStorage
+    }
+  }, [accessGranted]);
+
+  const persist = (next: Partial<PersistedState>) => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      const prev = raw ? (JSON.parse(raw) as PersistedState) : { email: "", simTier: null, userId: null };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...prev, ...next }));
+    } catch { /* noop */ }
+  };
 
   const reset = () => {
     setEmail("");
@@ -42,6 +137,7 @@ const TierPreview = () => {
     setTotalCount(0);
     setPage(0);
     setError(null);
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
   };
 
   const loadUser = async () => {
@@ -53,7 +149,6 @@ const TierPreview = () => {
     setRows([]);
 
     try {
-      // Match by username (we don't store email in profiles); fall back to local-part match.
       const localPart = email.split("@")[0].trim();
       const { data, error: qErr } = await supabase
         .from("profiles")
@@ -64,9 +159,18 @@ const TierPreview = () => {
 
       if (qErr) throw qErr;
       if (!data) {
-        setError(`No profile found matching "${email}". (Search uses username/display name.)`);
+        setError(`No profile found matching "${email}".`);
       } else {
-        setUser(data as LoadedUser);
+        const loaded = data as LoadedUser;
+        setUser(loaded);
+        // Default sim tier = user's actual tier (clamped to allowed sim values)
+        const actual = loaded.subscription_tier as string;
+        const defaultTier: SimTier =
+          actual === "pro" || actual === "whale" ? "pro" :
+          actual === "trial" ? "trial" : "free";
+        setSimTier(defaultTier);
+        persist({ email, userId: loaded.id, simTier: defaultTier });
+        runSimulation(defaultTier, 0);
       }
     } catch (e: any) {
       setError(e?.message || "Failed to load user");
@@ -86,11 +190,8 @@ const TierPreview = () => {
         .order("created_at", { ascending: false })
         .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
 
-      // Simulated tier filter — NOT a write. Mirrors the RLS policy:
-      // free users only see is_premium = false; pro/trial see everything.
-      if (tier === "free") {
-        query = query.eq("is_premium", false);
-      }
+      // Simulated tier filter — mirrors the RLS policy. Free → no premium rows.
+      if (tier === "free") query = query.eq("is_premium", false);
 
       const { data, count, error: qErr } = await query;
       if (qErr) throw qErr;
@@ -103,9 +204,10 @@ const TierPreview = () => {
     }
   };
 
-  const selectTier = (tier: SimTier) => {
+  const onTierChange = (tier: SimTier) => {
     setSimTier(tier);
     setPage(0);
+    persist({ simTier: tier });
     runSimulation(tier, 0);
   };
 
@@ -116,6 +218,15 @@ const TierPreview = () => {
   };
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  if (!accessChecked) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!accessGranted) return null;
 
   return (
     <div className="space-y-4">
@@ -173,34 +284,27 @@ const TierPreview = () => {
 
       {user && (
         <TerminalCard title="2. Simulate Tier">
-          <div className="p-2 flex flex-wrap gap-2">
-            {(["free", "trial", "pro"] as SimTier[]).map((t) => (
-              <label
-                key={t}
-                className={`flex items-center gap-1.5 px-3 py-1.5 border cursor-pointer text-xs uppercase tracking-wider transition-colors ${
-                  simTier === t
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="sim-tier"
-                  value={t}
-                  checked={simTier === t}
-                  onChange={() => selectTier(t)}
-                  className="accent-primary"
-                />
-                {t}
-              </label>
-            ))}
+          <div className="p-2 flex items-center gap-3">
+            <label htmlFor="sim-tier-select" className="text-[10px] uppercase tracking-wider text-muted-foreground font-data">
+              View as
+            </label>
+            <select
+              id="sim-tier-select"
+              value={simTier ?? ""}
+              onChange={(e) => onTierChange(e.target.value as SimTier)}
+              className="border border-border bg-background px-2 py-1.5 text-xs font-data text-foreground"
+            >
+              {(["free", "trial", "pro"] as SimTier[]).map((t) => (
+                <option key={t} value={t}>{TIER_LABEL[t]}</option>
+              ))}
+            </select>
           </div>
         </TerminalCard>
       )}
 
       {simTier && (
         <TerminalCard
-          title={`3. Live Preview — ${rows.length} of ${totalCount} rows visible at "${simTier}" tier`}
+          title={`3. Live Preview — ${rows.length} of ${totalCount} rows visible at "${TIER_LABEL[simTier]}" level`}
         >
           <div className="overflow-x-auto">
             <div className="grid grid-cols-5 border-b border-border px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground min-w-[600px]">

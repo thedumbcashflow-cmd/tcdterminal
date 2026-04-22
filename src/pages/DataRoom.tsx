@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import TopBar from "@/components/TopBar";
 import TerminalSidebar from "@/components/TerminalSidebar";
+import { PanelErrorBoundary } from "@/components/PanelErrorBoundary";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
 import { useDataRoom } from "@/hooks/useDataRoom";
 import { formatTvl } from "@/services/defiLlama";
@@ -134,7 +135,7 @@ const TvlChart = ({ data }: { data: Array<{ date: number; tvl: number }> }) => {
 const DataRoom = () => {
   const navigate = useNavigate();
   const { isPro, loading: subLoading } = useSubscriptionTier();
-  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, refresh, retryPanel } = useDataRoom();
+  const { tvlHistory, topProtocols, dexVolumes, topPools, revenueData, loading, errors, lastUpdated, lastSuccess, refresh, retryPanel } = useDataRoom();
 
   // Locked state for non-pro users
   if (subLoading) {
@@ -216,153 +217,42 @@ const DataRoom = () => {
               {/* TVL Chart */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">SOLANA TVL — 90 DAYS</h3>
-                {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={() => retryPanel("tvl")} /> : (
-                  <>
-                    <TvlChart data={tvlHistory} />
-                    <div className="flex gap-6 mt-3">
-                      <div>
-                        <span className="text-zinc-500 font-mono text-[10px]">CURRENT TVL</span>
-                        <div className="font-mono text-sm text-zinc-50">{formatTvl(currentTvl)}</div>
+                <PanelErrorBoundary panelName="tvl" onRetry={() => retryPanel("tvl")} lastSuccessAt={lastSuccess.tvl}>
+                  {loading.tvl ? <SkeletonRows /> : errors.tvl ? <ErrorPanel message={errors.tvl} onRetry={() => retryPanel("tvl")} /> : (
+                    <>
+                      <TvlChart data={tvlHistory} />
+                      <div className="flex gap-6 mt-3">
+                        <div>
+                          <span className="text-zinc-500 font-mono text-[10px]">CURRENT TVL</span>
+                          <div className="font-mono text-sm text-zinc-50">{formatTvl(currentTvl)}</div>
+                        </div>
+                        <div>
+                          <span className="text-zinc-500 font-mono text-[10px]">7D CHANGE</span>
+                          <div className="font-mono text-sm">{fmtChange(tvl7dChange)}</div>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-zinc-500 font-mono text-[10px]">7D CHANGE</span>
-                        <div className="font-mono text-sm">{fmtChange(tvl7dChange)}</div>
-                      </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
+                </PanelErrorBoundary>
               </div>
 
               {/* Top Protocols */}
               <div>
                 <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA PROTOCOLS — TVL</h3>
-                {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={() => retryPanel("protocols")} /> : (
-                  <table className="w-full">
-                    <thead>
-                      <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
-                        <th className="pb-2 text-left w-6">#</th>
-                        <th className="pb-2 text-left">Protocol</th>
-                        <th className="pb-2 text-left">Category</th>
-                        <th className="pb-2 text-right">TVL</th>
-                        <th className="pb-2 text-right">24h</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topProtocols.map((p, i) => (
-                        <tr key={p.name} className="border-b border-zinc-800/50 font-mono text-xs">
-                          <td className="py-1.5 text-zinc-500">{i + 1}</td>
-                          <td className="py-1.5 text-zinc-300 flex items-center gap-2">
-                            {p.logo ? (
-                              <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
-                            ) : (
-                              <div className="w-4 h-4 rounded-full bg-zinc-700" />
-                            )}
-                            {p.name}
-                          </td>
-                          <td className="py-1.5 text-zinc-500 text-[10px]">{p.category}</td>
-                          <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.tvl)}</td>
-                          <td className="py-1.5 text-right">{fmtChange(p.change_1d)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ═══ PANEL 2: DEX VOLUMES ═══ */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Bar chart */}
-              <div>
-                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">DEX VOLUME — 24H BY PROTOCOL</h3>
-                {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={() => retryPanel("dex")} /> : dexVolumes && (
-                  <>
-                    <div className="mb-4 flex items-baseline gap-2">
-                      <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(dexVolumes.totalDailyVolume)}</span>
-                      <span className="font-mono text-[10px] text-zinc-500">total 24h DEX volume on Solana</span>
-                    </div>
-                    <div className="space-y-2">
-                      {dexVolumes.protocols.map(p => (
-                        <div key={p.name} className="flex items-center gap-3">
-                          {p.logo ? (
-                            <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full bg-zinc-700 flex-shrink-0" />
-                          )}
-                          <span className="font-mono text-[10px] text-zinc-400 w-20 truncate">{p.name}</span>
-                          <div className="flex-1 bg-zinc-800 rounded-full h-1.5 relative">
-                            <div
-                              className="bg-green-400 rounded-full h-full"
-                              style={{ width: `${(p.dailyVolume / maxDexVol) * 100}%` }}
-                            />
-                          </div>
-                          <span className="font-mono text-[10px] text-zinc-300 w-16 text-right">{formatTvl(p.dailyVolume)}</span>
-                          <span className="font-mono text-[9px] w-12 text-right">{fmtChange(p.change_1d)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Top Pools */}
-              <div>
-                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA POOLS — 24H VOLUME</h3>
-                {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={() => retryPanel("pools")} /> : (
-                  <table className="w-full">
-                    <thead>
-                      <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
-                        <th className="pb-2 text-left">Pool</th>
-                        <th className="pb-2 text-left">DEX</th>
-                        <th className="pb-2 text-right">24h Vol</th>
-                        <th className="pb-2 text-right">Liquidity</th>
-                        <th className="pb-2 text-right">Price Δ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topPools.map(p => (
-                        <tr key={p.address} className="border-b border-zinc-800/50 font-mono text-xs">
-                          <td className="py-1.5 text-zinc-300 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">{p.name}</td>
-                          <td className="py-1.5 text-zinc-500 text-[10px] capitalize">{p.dex.replace(/-/g, " ")}</td>
-                          <td className="py-1.5 text-zinc-50 text-right">{formatTvl(parseFloat(p.volume_h24))}</td>
-                          <td className="py-1.5 text-zinc-400 text-right">{formatTvl(parseFloat(p.reserve_in_usd))}</td>
-                          <td className="py-1.5 text-right">{fmtChange(parseFloat(p.price_change_h24))}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ═══ PANEL 3: PROTOCOL REVENUE ═══ */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Revenue Table */}
-              <div>
-                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">PROTOCOL REVENUE — SOLANA</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
-                  <>
-                    <div className="mb-4 flex items-baseline gap-2">
-                      <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
-                      <span className="font-mono text-[10px] text-zinc-500">total protocol revenue today</span>
-                    </div>
+                <PanelErrorBoundary panelName="protocols" onRetry={() => retryPanel("protocols")} lastSuccessAt={lastSuccess.protocols}>
+                  {loading.protocols ? <SkeletonRows /> : errors.protocols ? <ErrorPanel message={errors.protocols} onRetry={() => retryPanel("protocols")} /> : (
                     <table className="w-full">
                       <thead>
                         <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
                           <th className="pb-2 text-left w-6">#</th>
                           <th className="pb-2 text-left">Protocol</th>
-                          <th className="pb-2 text-left">Cat</th>
-                          <th className="pb-2 text-right">Daily Rev</th>
-                          <th className="pb-2 text-right">Fees</th>
-                          <th className="pb-2 text-right">Δ</th>
+                          <th className="pb-2 text-left">Category</th>
+                          <th className="pb-2 text-right">TVL</th>
+                          <th className="pb-2 text-right">24h</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {revenueData.protocols.map((p, i) => (
+                        {topProtocols.map((p, i) => (
                           <tr key={p.name} className="border-b border-zinc-800/50 font-mono text-xs">
                             <td className="py-1.5 text-zinc-500">{i + 1}</td>
                             <td className="py-1.5 text-zinc-300 flex items-center gap-2">
@@ -374,26 +264,33 @@ const DataRoom = () => {
                               {p.name}
                             </td>
                             <td className="py-1.5 text-zinc-500 text-[10px]">{p.category}</td>
-                            <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.dailyRevenue)}</td>
-                            <td className="py-1.5 text-zinc-400 text-right">{formatTvl(p.dailyFees)}</td>
+                            <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.tvl)}</td>
                             <td className="py-1.5 text-right">{fmtChange(p.change_1d)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </>
-                )}
+                  )}
+                </PanelErrorBoundary>
               </div>
+            </div>
+          </div>
 
-              {/* Revenue/Fees Ratio Bars */}
+          {/* ═══ PANEL 2: DEX VOLUMES ═══ */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Bar chart */}
               <div>
-                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">REVENUE / FEES RATIO — TOP 8</h3>
-                {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
-                  <>
-                    <div className="space-y-3">
-                      {revenueData.protocols.slice(0, 8).map(p => {
-                        const ratio = p.dailyFees > 0 ? Math.min(100, Math.round((p.dailyRevenue / p.dailyFees) * 100)) : 0;
-                        return (
+                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">DEX VOLUME — 24H BY PROTOCOL</h3>
+                <PanelErrorBoundary panelName="dex" onRetry={() => retryPanel("dex")} lastSuccessAt={lastSuccess.dex}>
+                  {loading.dex ? <SkeletonRows /> : errors.dex ? <ErrorPanel message={errors.dex} onRetry={() => retryPanel("dex")} /> : dexVolumes && (
+                    <>
+                      <div className="mb-4 flex items-baseline gap-2">
+                        <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(dexVolumes.totalDailyVolume)}</span>
+                        <span className="font-mono text-[10px] text-zinc-500">total 24h DEX volume on Solana</span>
+                      </div>
+                      <div className="space-y-2">
+                        {dexVolumes.protocols.map(p => (
                           <div key={p.name} className="flex items-center gap-3">
                             {p.logo ? (
                               <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
@@ -401,29 +298,145 @@ const DataRoom = () => {
                               <div className="w-4 h-4 rounded-full bg-zinc-700 flex-shrink-0" />
                             )}
                             <span className="font-mono text-[10px] text-zinc-400 w-20 truncate">{p.name}</span>
-                            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                              {p.dailyFees > 0 ? (
-                                <>
-                                  <div className="bg-green-400 h-full" style={{ width: `${ratio}%` }} />
-                                  <div className="bg-zinc-600 h-full" style={{ width: `${100 - ratio}%` }} />
-                                </>
-                              ) : (
-                                <div className="bg-zinc-700 h-full w-full" />
-                              )}
+                            <div className="flex-1 bg-zinc-800 rounded-full h-1.5 relative">
+                              <div
+                                className="bg-green-400 rounded-full h-full"
+                                style={{ width: `${(p.dailyVolume / maxDexVol) * 100}%` }}
+                              />
                             </div>
-                            <span className="font-mono text-[9px] text-zinc-400 w-10 text-right">
-                              {p.dailyFees > 0 ? `${ratio}%` : "—"}
-                            </span>
+                            <span className="font-mono text-[10px] text-zinc-300 w-16 text-right">{formatTvl(p.dailyVolume)}</span>
+                            <span className="font-mono text-[9px] w-12 text-right">{fmtChange(p.change_1d)}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <p className="font-mono text-[9px] text-zinc-600 mt-4">
-                      Revenue = fees retained by protocol treasury. Fees = total paid by users.<br />
-                      Source: DeFiLlama open API — api.llama.fi
-                    </p>
-                  </>
-                )}
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </PanelErrorBoundary>
+              </div>
+
+              {/* Top Pools */}
+              <div>
+                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">TOP SOLANA POOLS — 24H VOLUME</h3>
+                <PanelErrorBoundary panelName="pools" onRetry={() => retryPanel("pools")} lastSuccessAt={lastSuccess.pools}>
+                  {loading.pools ? <SkeletonRows /> : errors.pools ? <ErrorPanel message={errors.pools} onRetry={() => retryPanel("pools")} /> : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
+                          <th className="pb-2 text-left">Pool</th>
+                          <th className="pb-2 text-left">DEX</th>
+                          <th className="pb-2 text-right">24h Vol</th>
+                          <th className="pb-2 text-right">Liquidity</th>
+                          <th className="pb-2 text-right">Price Δ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {topPools.map(p => (
+                          <tr key={p.address} className="border-b border-zinc-800/50 font-mono text-xs">
+                            <td className="py-1.5 text-zinc-300 max-w-[140px] overflow-hidden text-ellipsis whitespace-nowrap">{p.name}</td>
+                            <td className="py-1.5 text-zinc-500 text-[10px] capitalize">{p.dex.replace(/-/g, " ")}</td>
+                            <td className="py-1.5 text-zinc-50 text-right">{formatTvl(parseFloat(p.volume_h24))}</td>
+                            <td className="py-1.5 text-zinc-400 text-right">{formatTvl(parseFloat(p.reserve_in_usd))}</td>
+                            <td className="py-1.5 text-right">{fmtChange(parseFloat(p.price_change_h24))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </PanelErrorBoundary>
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ PANEL 3: PROTOCOL REVENUE ═══ */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Revenue Table */}
+              <div>
+                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-1">PROTOCOL REVENUE — SOLANA</h3>
+                <PanelErrorBoundary panelName="revenue" onRetry={() => retryPanel("revenue")} lastSuccessAt={lastSuccess.revenue}>
+                  {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
+                    <>
+                      <div className="mb-4 flex items-baseline gap-2">
+                        <span className="font-mono text-xl text-zinc-50 font-semibold">{formatTvl(revenueData.totalDailyRevenue)}</span>
+                        <span className="font-mono text-[10px] text-zinc-500">total protocol revenue today</span>
+                      </div>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider">
+                            <th className="pb-2 text-left w-6">#</th>
+                            <th className="pb-2 text-left">Protocol</th>
+                            <th className="pb-2 text-left">Cat</th>
+                            <th className="pb-2 text-right">Daily Rev</th>
+                            <th className="pb-2 text-right">Fees</th>
+                            <th className="pb-2 text-right">Δ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {revenueData.protocols.map((p, i) => (
+                            <tr key={p.name} className="border-b border-zinc-800/50 font-mono text-xs">
+                              <td className="py-1.5 text-zinc-500">{i + 1}</td>
+                              <td className="py-1.5 text-zinc-300 flex items-center gap-2">
+                                {p.logo ? (
+                                  <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full bg-zinc-700" />
+                                )}
+                                {p.name}
+                              </td>
+                              <td className="py-1.5 text-zinc-500 text-[10px]">{p.category}</td>
+                              <td className="py-1.5 text-zinc-50 text-right">{formatTvl(p.dailyRevenue)}</td>
+                              <td className="py-1.5 text-zinc-400 text-right">{formatTvl(p.dailyFees)}</td>
+                              <td className="py-1.5 text-right">{fmtChange(p.change_1d)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                </PanelErrorBoundary>
+              </div>
+
+              {/* Revenue/Fees Ratio Bars */}
+              <div>
+                <h3 className="font-mono text-[10px] text-zinc-400 tracking-widest mb-4">REVENUE / FEES RATIO — TOP 8</h3>
+                <PanelErrorBoundary panelName="revenue-ratio" onRetry={() => retryPanel("revenue")} lastSuccessAt={lastSuccess.revenue}>
+                  {loading.revenue ? <SkeletonRows /> : errors.revenue ? <ErrorPanel message={errors.revenue} onRetry={() => retryPanel("revenue")} /> : revenueData && (
+                    <>
+                      <div className="space-y-3">
+                        {revenueData.protocols.slice(0, 8).map(p => {
+                          const ratio = p.dailyFees > 0 ? Math.min(100, Math.round((p.dailyRevenue / p.dailyFees) * 100)) : 0;
+                          return (
+                            <div key={p.name} className="flex items-center gap-3">
+                              {p.logo ? (
+                                <img src={p.logo} alt="" className="w-4 h-4 rounded-full" />
+                              ) : (
+                                <div className="w-4 h-4 rounded-full bg-zinc-700 flex-shrink-0" />
+                              )}
+                              <span className="font-mono text-[10px] text-zinc-400 w-20 truncate">{p.name}</span>
+                              <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
+                                {p.dailyFees > 0 ? (
+                                  <>
+                                    <div className="bg-green-400 h-full" style={{ width: `${ratio}%` }} />
+                                    <div className="bg-zinc-600 h-full" style={{ width: `${100 - ratio}%` }} />
+                                  </>
+                                ) : (
+                                  <div className="bg-zinc-700 h-full w-full" />
+                                )}
+                              </div>
+                              <span className="font-mono text-[9px] text-zinc-400 w-10 text-right">
+                                {p.dailyFees > 0 ? `${ratio}%` : "—"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="font-mono text-[9px] text-zinc-600 mt-4">
+                        Revenue = fees retained by protocol treasury. Fees = total paid by users.<br />
+                        Source: DeFiLlama open API — api.llama.fi
+                      </p>
+                    </>
+                  )}
+                </PanelErrorBoundary>
               </div>
             </div>
           </div>

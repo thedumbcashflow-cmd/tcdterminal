@@ -23,6 +23,17 @@ function corsFor(req: Request) {
   return { headers: baseCors, allowed: false, origin };
 }
 
+function logCorsDenied(req: Request, origin: string | null) {
+  const url = new URL(req.url);
+  console.error(JSON.stringify({
+    event: "cors_denied",
+    origin,
+    path: url.pathname,
+    timestamp: new Date().toISOString(),
+    ip: req.headers.get("x-forwarded-for") ?? "unknown",
+  }));
+}
+
 const PRICING: Record<string, Record<string, number>> = {
   pro: { monthly: 199, quarterly: 549, yearly: 1999 },
   whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
@@ -31,12 +42,18 @@ const PRICING: Record<string, Record<string, number>> = {
 serve(async (req) => {
   const cors = corsFor(req);
   if (req.method === "OPTIONS") {
-    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    if (!cors.allowed) {
+      logCorsDenied(req, cors.origin);
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { "Content-Type": "application/json" },
+      });
+    }
     return new Response(null, { headers: cors.headers });
   }
   if (!cors.allowed) {
-    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
-      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    logCorsDenied(req, cors.origin);
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
     });
   }
 

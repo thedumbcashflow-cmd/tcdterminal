@@ -23,6 +23,7 @@ export function useDataRoom() {
   const [revenueData, setRevenueData] = useState<{ totalDailyRevenue: number; protocols: ProtocolRevenue[] } | null>(null);
   const [loading, setLoading] = useState<LoadingState>({ tvl: true, protocols: true, dex: true, pools: true, revenue: true });
   const [errors, setErrors] = useState<ErrorState>({ tvl: null, protocols: null, dex: null, pools: null, revenue: null });
+  const [lastSuccess, setLastSuccess] = useState<Record<PanelKey, Date | null>>({ tvl: null, protocols: null, dex: null, pools: null, revenue: null });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Per-panel last-fetched timestamps for 60s client cache
@@ -41,6 +42,7 @@ export function useDataRoom() {
         case "revenue": setRevenueData(await fetchSolanaProtocolRevenue()); break;
       }
       lastFetchedRef.current[key] = Date.now();
+      setLastSuccess(p => ({ ...p, [key]: new Date() }));
     } catch (e: any) {
       setErrors(p => ({ ...p, [key]: e?.message || "Network error" }));
     } finally {
@@ -69,7 +71,7 @@ export function useDataRoom() {
 
   return {
     tvlHistory, topProtocols, dexVolumes, topPools, revenueData,
-    loading, errors, lastUpdated,
+    loading, errors, lastSuccess, lastUpdated,
     refresh: () => fetchAll(true),
     retryPanel,
   };

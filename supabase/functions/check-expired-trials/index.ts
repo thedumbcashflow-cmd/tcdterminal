@@ -16,22 +16,39 @@ const baseCors = {
 function corsFor(req: Request) {
   const origin = req.headers.get("Origin");
   // Cron callers have no Origin header — allow them.
-  if (!origin) return { headers: baseCors, allowed: true };
+  if (!origin) return { headers: baseCors, allowed: true, origin: null as string | null };
   if (ALLOWED_ORIGINS.includes(origin)) {
-    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true, origin };
   }
-  return { headers: baseCors, allowed: false };
+  return { headers: baseCors, allowed: false, origin };
+}
+
+function logCorsDenied(req: Request, origin: string | null) {
+  const url = new URL(req.url);
+  console.error(JSON.stringify({
+    event: "cors_denied",
+    origin,
+    path: url.pathname,
+    timestamp: new Date().toISOString(),
+    ip: req.headers.get("x-forwarded-for") ?? "unknown",
+  }));
 }
 
 Deno.serve(async (req) => {
   const cors = corsFor(req);
   if (req.method === "OPTIONS") {
-    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    if (!cors.allowed) {
+      logCorsDenied(req, cors.origin);
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { "Content-Type": "application/json" },
+      });
+    }
     return new Response(null, { headers: cors.headers });
   }
   if (!cors.allowed) {
-    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
-      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    logCorsDenied(req, cors.origin);
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
     });
   }
 

@@ -1,0 +1,137 @@
+{
+  "generated_at": "2026-04-22T14:35:00.000Z",
+  "build_pass": "hardening-pass-3",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "high",
+      "status": "fixed",
+      "description": "Edge functions accepted requests from any origin (Access-Control-Allow-Origin: *), exposing them to CSRF and unauthorised cross-origin invocation.",
+      "files_changed": [
+        "supabase/functions/chat/index.ts",
+        "supabase/functions/data-room-proxy/index.ts",
+        "supabase/functions/analyze-market/index.ts",
+        "supabase/functions/fetch-prices/index.ts",
+        "supabase/functions/macro-snapshot/index.ts",
+        "supabase/functions/create-checkout/index.ts",
+        "supabase/functions/paypal-client-token/index.ts",
+        "supabase/functions/sync-market-data/index.ts",
+        "supabase/functions/payment-webhook/index.ts",
+        "supabase/functions/check-expired-trials/index.ts"
+      ]
+    },
+    {
+      "id": "F-002",
+      "severity": "high",
+      "status": "fixed",
+      "description": "market_intel premium rows could leak to free users via the realtime broadcast channel. Channel split into public + premium with tier-gated subscription.",
+      "files_changed": ["src/hooks/useMarketIntel.ts"]
+    },
+    {
+      "id": "F-003",
+      "severity": "high",
+      "status": "fixed",
+      "description": "RLS policy on market_intel now restricts is_premium=true SELECT to subscription_tier IN ('pro','whale') or admin role via get_subscription_tier(auth.uid()).",
+      "files_changed": ["supabase/migrations/"]
+    },
+    {
+      "id": "F-004",
+      "severity": "medium",
+      "status": "fixed",
+      "description": "Defense-in-depth trigger prevent_tier_self_modification on profiles blocks users from mutating their own subscription_tier or trial_ends_at.",
+      "files_changed": ["supabase/migrations/"]
+    },
+    {
+      "id": "F-005",
+      "severity": "high",
+      "status": "fixed",
+      "description": "chat edge function crashed at boot (RUNTIME_ERROR lineno 0). Added top-level try/catch, env-var validation, /health route, input length caps (≤50 messages, ≤4000 chars).",
+      "files_changed": ["supabase/functions/chat/index.ts"]
+    },
+    {
+      "id": "F-006",
+      "severity": "medium",
+      "status": "fixed",
+      "description": "Tier Preview tool now performs server-side has_role('admin') check on mount and redirects non-admins to /admin with a Not Authorised toast (defense-in-depth).",
+      "files_changed": ["src/components/admin/TierPreview.tsx", "src/pages/Admin.tsx"]
+    },
+    {
+      "id": "F-007",
+      "severity": "low",
+      "status": "fixed",
+      "description": "CORS denial events are now logged server-side (console.error JSON) capturing origin, path, timestamp, and forwarded IP. Client receives only {error:'Forbidden'}.",
+      "files_changed": [
+        "supabase/functions/chat/index.ts",
+        "supabase/functions/data-room-proxy/index.ts",
+        "supabase/functions/analyze-market/index.ts",
+        "supabase/functions/fetch-prices/index.ts",
+        "supabase/functions/macro-snapshot/index.ts",
+        "supabase/functions/create-checkout/index.ts",
+        "supabase/functions/paypal-client-token/index.ts",
+        "supabase/functions/sync-market-data/index.ts",
+        "supabase/functions/payment-webhook/index.ts",
+        "supabase/functions/check-expired-trials/index.ts"
+      ]
+    },
+    {
+      "id": "F-008",
+      "severity": "medium",
+      "status": "fixed",
+      "description": "Data Room panels now run inside per-panel React error boundaries; a render exception or fetch failure in one panel cannot break sibling panels. Retry re-fetches only the failed panel.",
+      "files_changed": ["src/components/PanelErrorBoundary.tsx", "src/pages/DataRoom.tsx", "src/hooks/useDataRoom.ts"]
+    },
+    {
+      "id": "F-009",
+      "severity": "high",
+      "status": "already_clean",
+      "description": "Audit confirmed no SUPABASE_SERVICE_ROLE_KEY references exist in any client-side source file (src/, components/, pages/, public/). Service role usage is confined to edge functions.",
+      "files_changed": []
+    },
+    {
+      "id": "F-010",
+      "severity": "medium",
+      "status": "already_clean",
+      "description": "Audit confirmed no hardcoded API keys for DeFiLlama, GeckoTerminal, Anthropic, PayPal, or Solana RPC in any client-side file. All third-party calls route through edge functions or use the Lovable AI Gateway with server-managed keys.",
+      "files_changed": []
+    },
+    {
+      "id": "F-011",
+      "severity": "low",
+      "status": "already_clean",
+      "description": "All public schema tables (profiles, market_intel, subscriptions, user_roles, user_watchlist, feature_requests, sync_jobs, provider_status) have RLS enabled with appropriate ownership-scoped policies.",
+      "files_changed": []
+    },
+    {
+      "id": "F-012",
+      "severity": "low",
+      "status": "fixed",
+      "description": "Tier Preview gained sessionStorage persistence (key 'tier_preview_state') and a labelled tier dropdown (Free/Trial/Pro user). State restores on tab revisit and clears on Reset.",
+      "files_changed": ["src/components/admin/TierPreview.tsx"]
+    }
+  ],
+  "summary": {
+    "total_findings": 12,
+    "fixed": 9,
+    "already_clean": 3,
+    "files_modified": [
+      "supabase/functions/chat/index.ts",
+      "supabase/functions/data-room-proxy/index.ts",
+      "supabase/functions/analyze-market/index.ts",
+      "supabase/functions/fetch-prices/index.ts",
+      "supabase/functions/macro-snapshot/index.ts",
+      "supabase/functions/create-checkout/index.ts",
+      "supabase/functions/paypal-client-token/index.ts",
+      "supabase/functions/sync-market-data/index.ts",
+      "supabase/functions/payment-webhook/index.ts",
+      "supabase/functions/check-expired-trials/index.ts",
+      "src/hooks/useMarketIntel.ts",
+      "src/hooks/useDataRoom.ts",
+      "src/hooks/useSubscriptionTier.ts",
+      "src/components/admin/TierPreview.tsx",
+      "src/components/PanelErrorBoundary.tsx",
+      "src/pages/Admin.tsx",
+      "src/pages/DataRoom.tsx",
+      "src/services/defiLlama.ts"
+    ]
+  }
+}
