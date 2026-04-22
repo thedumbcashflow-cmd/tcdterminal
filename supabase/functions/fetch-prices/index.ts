@@ -1,10 +1,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
+
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
 
 const COIN_IDS = "solana,bitcoin,ethereum,jupiter-exchange-solana,bonk,raydium,pyth-network";
 const SYMBOLS_MAP: Record<string, string> = {
@@ -17,7 +34,6 @@ const SYMBOLS_MAP: Record<string, string> = {
   "pyth-network": "PYTH",
 };
 
-// Static fallback prices so we never return an error
 const FALLBACK_TICKERS = [
   { symbol: "SOL", price: 83, change24h: 0 },
   { symbol: "BTC", price: 67000, change24h: 0 },
@@ -28,21 +44,27 @@ const FALLBACK_TICKERS = [
   { symbol: "PYTH", price: 0.047, change24h: 0 },
 ];
 
-// In-memory cache to avoid CoinGecko rate limits
 let cachedTickers: any[] | null = null;
 let cacheTimestamp = 0;
-const CACHE_TTL_MS = 120_000; // 120 seconds (longer to reduce rate limit hits)
+const CACHE_TTL_MS = 120_000;
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const now = Date.now();
-
-    // Return cached data if fresh
     if (cachedTickers && now - cacheTimestamp < CACHE_TTL_MS) {
       return new Response(JSON.stringify(cachedTickers), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
@@ -51,14 +73,13 @@ serve(async (req) => {
 
     if (!res.ok) {
       console.error("CoinGecko error:", res.status);
-      // If rate limited but we have cached data, return stale cache
       if (cachedTickers) {
         return new Response(JSON.stringify(cachedTickers), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
       return new Response(JSON.stringify(FALLBACK_TICKERS), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
@@ -69,23 +90,21 @@ serve(async (req) => {
       change24h: data.usd_24h_change ?? 0,
     }));
 
-    // Update cache
     cachedTickers = tickers;
     cacheTimestamp = now;
 
     return new Response(JSON.stringify(tickers), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("fetch-prices error:", e);
-    // Return stale cache on error
     if (cachedTickers) {
       return new Response(JSON.stringify(cachedTickers), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
     return new Response(JSON.stringify(FALLBACK_TICKERS), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   }
 });

@@ -1,29 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
-const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json", ...extra },
-  });
+function corsFor(req: Request): { headers: Record<string, string>; allowed: boolean; origin: string | null } {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCors, allowed: true, origin: null };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true, origin };
+  }
+  return { headers: baseCors, allowed: false, origin };
+}
 
 serve(async (req) => {
-  try {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const cors = corsFor(req);
 
-    // Health check (does not require auth or env)
+  try {
+    if (req.method === "OPTIONS") {
+      if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+      return new Response("ok", { headers: cors.headers });
+    }
+    if (!cors.allowed) {
+      return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+        status: 403,
+        headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+    }
+
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname.endsWith("/health")) {
       return json({ status: "ok" });
     }
 
-    // Validate required env at request time (avoid top-level crashes)
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -38,7 +64,6 @@ serve(async (req) => {
       return json({ error: `Server misconfigured: missing ${missing.join(", ")}` }, 500);
     }
 
-    // Authenticate
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
@@ -51,7 +76,6 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub;
 
-    // Validate body
     let body: { messages?: Array<{ role: string; content: string }> };
     try {
       body = await req.json();
@@ -128,10 +152,13 @@ RULES:
     }
 
     return new Response(response.body, {
-      headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+      headers: { ...cors.headers, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
     console.error("chat fatal error:", e);
-    return json({ error: e instanceof Error ? e.message : "Unknown error" }, 500);
+    return new Response(
+      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 500, headers: { ...cors.headers, "Content-Type": "application/json" } }
+    );
   }
 });

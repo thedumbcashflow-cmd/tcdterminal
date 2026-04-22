@@ -1,13 +1,40 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  // Cron / server-to-server callers have no Origin header - allow them.
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
 
   const startTime = Date.now();
   const supabase = createClient(
@@ -17,7 +44,6 @@ serve(async (req) => {
 
   const results: Record<string, { success: boolean; rows?: number; error?: string }> = {};
 
-  // 1. Sync CoinGecko prices (provider: coingecko)
   try {
     const coinIds = "solana,bitcoin,ethereum,jupiter-exchange-solana,bonk,raydium,pyth-network";
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true`;
@@ -50,7 +76,6 @@ serve(async (req) => {
     results.coingecko = { success: false, error: e instanceof Error ? e.message : "Unknown" };
   }
 
-  // 2. Check market_intel freshness (provider: market_intel)
   try {
     const { count } = await supabase.from("market_intel").select("*", { count: "exact", head: true });
     await supabase.from("provider_status").upsert({
@@ -64,7 +89,6 @@ serve(async (req) => {
     results.market_intel = { success: false, error: e instanceof Error ? e.message : "Unknown" };
   }
 
-  // Update sync_jobs
   const totalRows = Object.values(results).reduce((sum, r) => sum + (r.rows || 0), 0);
   const allSuccess = Object.values(results).every(r => r.success);
 
@@ -77,6 +101,6 @@ serve(async (req) => {
   }, { onConflict: "job_name" });
 
   return new Response(JSON.stringify({ results, duration_ms: Date.now() - startTime }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...cors.headers, "Content-Type": "application/json" },
   });
 });

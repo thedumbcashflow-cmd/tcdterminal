@@ -1,10 +1,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
+
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCors, allowed: true, origin: null as string | null };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true, origin };
+  }
+  return { headers: baseCors, allowed: false, origin };
+}
 
 const PRICING: Record<string, Record<string, number>> = {
   pro: { monthly: 199, quarterly: 549, yearly: 1999 },
@@ -12,13 +29,22 @@ const PRICING: Record<string, Record<string, number>> = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
 
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
@@ -31,30 +57,28 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
-    const { plan, period = "monthly", provider } = await req.json();
+    const { plan, period = "monthly" } = await req.json();
     const prices = PRICING[plan];
     if (!prices || !prices[period]) {
       return new Response(JSON.stringify({ error: "Invalid plan or period" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
     const amount = prices[period];
 
-    // PayPal order creation
     const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
     const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
     if (!clientId || !clientSecret) {
       return new Response(JSON.stringify({ error: "PayPal not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
-    // Get access token
     const tokenResp = await fetch("https://api-m.sandbox.paypal.com/v1/oauth2/token", {
       method: "POST",
       headers: {
@@ -66,7 +90,7 @@ serve(async (req) => {
     const tokenData = await tokenResp.json();
     const accessToken = tokenData.access_token;
 
-    // Create order
+    const returnOrigin = cors.origin || "https://tcdterminal.lovable.app";
     const orderResp = await fetch("https://api-m.sandbox.paypal.com/v2/checkout/orders", {
       method: "POST",
       headers: {
@@ -76,17 +100,14 @@ serve(async (req) => {
       body: JSON.stringify({
         intent: "CAPTURE",
         purchase_units: [{
-          amount: {
-            currency_code: "USD",
-            value: amount.toFixed(2),
-          },
+          amount: { currency_code: "USD", value: amount.toFixed(2) },
           description: `TCD Terminal ${plan.toUpperCase()} - ${period}`,
           custom_id: JSON.stringify({ user_id: user.id, plan, period }),
         }],
         application_context: {
           brand_name: "TCD Terminal",
-          return_url: `${req.headers.get("origin") || "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app"}/pricing?payment=success&plan=${plan}`,
-          cancel_url: `${req.headers.get("origin") || "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app"}/pricing`,
+          return_url: `${returnOrigin}/pricing?payment=success&plan=${plan}`,
+          cancel_url: `${returnOrigin}/pricing`,
         },
       }),
     });
@@ -95,7 +116,7 @@ serve(async (req) => {
     if (!orderResp.ok) {
       console.error("PayPal order error:", orderData);
       return new Response(JSON.stringify({ error: "Failed to create PayPal order" }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 502, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
@@ -105,12 +126,12 @@ serve(async (req) => {
       order_id: orderData.id,
       approval_url: approvalLink,
     }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("create-checkout error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   }
 });

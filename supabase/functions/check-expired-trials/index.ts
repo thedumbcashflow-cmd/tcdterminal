@@ -1,14 +1,38 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+const baseCors = {
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Vary": "Origin",
 };
 
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  // Cron callers have no Origin header — allow them.
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
+
 Deno.serve(async (req) => {
+  const cors = corsFor(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    return new Response(null, { headers: cors.headers });
+  }
+  if (!cors.allowed) {
+    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
+      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -16,7 +40,6 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Find users whose trial has expired and are still on pro_trial / free with active trial
     const { data: expiredUsers, error: fetchError } = await supabase
       .from("profiles")
       .select("id")
@@ -40,12 +63,12 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, expired_count: updated }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...cors.headers, "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...cors.headers, "Content-Type": "application/json" } }
     );
   }
 });
