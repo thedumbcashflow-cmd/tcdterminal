@@ -73,12 +73,18 @@ async function fetchDxyProxy() {
 Deno.serve(async (req) => {
   const cors = corsFor(req);
   if (req.method === "OPTIONS") {
-    if (!cors.allowed) return new Response("Forbidden", { status: 403 });
+    if (!cors.allowed) {
+      logCorsDenied(req, cors.origin);
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { "Content-Type": "application/json" },
+      });
+    }
     return new Response(null, { headers: cors.headers });
   }
   if (!cors.allowed) {
-    return new Response(JSON.stringify({ error: "Origin not allowed" }), {
-      status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+    logCorsDenied(req, cors.origin);
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
     });
   }
 
