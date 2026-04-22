@@ -616,6 +616,11 @@ const Admin = () => {
             </TerminalCard>
           </>
         )}
+
+        {/* TIER PREVIEW TAB — admin only (extra defense-in-depth check) */}
+        {activeTab === "tier-preview" && role === "admin" && (
+          <TierPreview />
+        )}
       </div>
     </div>
   );
