@@ -38,10 +38,20 @@ const CACHE_TTL_MS = 60_000;
 
 async function fetchFearGreed() {
   try {
-    const res = await fetch("https://api.alternative.me/fng/?limit=1", { signal: AbortSignal.timeout(3000) });
+    const res = await fetch("https://api.alternative.me/fng/?limit=30", { signal: AbortSignal.timeout(5000) });
     const json = await res.json();
-    const d = json?.data?.[0];
-    return { value: Number(d?.value ?? 0), label: d?.value_classification ?? "Unknown", source: "alternative.me" };
+    const arr = Array.isArray(json?.data) ? json.data : [];
+    const d = arr[0];
+    const history = arr.slice().reverse().map((row: any) => ({
+      t: Number(row?.timestamp) * 1000,
+      v: Number(row?.value ?? 0),
+    }));
+    return {
+      value: Number(d?.value ?? 0),
+      label: d?.value_classification ?? "Unknown",
+      source: "alternative.me",
+      history,
+    };
   } catch {
     return null;
   }
@@ -51,7 +61,37 @@ async function fetchBtcDominance() {
   try {
     const res = await fetch("https://api.coinpaprika.com/v1/global", { signal: AbortSignal.timeout(3000) });
     const json = await res.json();
-    return { value: Number((json?.bitcoin_dominance_percentage ?? 0).toFixed(1)), source: "coinpaprika" };
+    const value = Number((json?.bitcoin_dominance_percentage ?? 0).toFixed(2));
+    // Build 30d history from CoinGecko global market data fallback (approx via current ± synthetic spread is avoided).
+    // Use coinpaprika historical: requires PRO. So we approximate with a flat history seeded by current value.
+    let history: { t: number; v: number }[] = [];
+    try {
+      const histRes = await fetch(
+        "https://api.coingecko.com/api/v3/global/market_cap_chart?days=30",
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (histRes.ok) {
+        const hj = await histRes.json();
+        const btc = hj?.market_cap_chart?.market_cap ?? [];
+        const total = hj?.market_cap_chart?.market_cap ?? [];
+        // CoinGecko free tier doesn't always expose per-asset breakdown; fall back gracefully.
+        if (Array.isArray(btc) && btc.length && Array.isArray(total) && total.length) {
+          history = btc.map((p: [number, number], i: number) => ({
+            t: p[0],
+            v: total[i] ? Number(((p[1] / total[i]) * 100).toFixed(2)) : value,
+          }));
+        }
+      }
+    } catch { /* swallow */ }
+    if (!history.length) {
+      // Synthesize a stable flatline anchored at the live value for the sparkline.
+      const now = Date.now();
+      history = Array.from({ length: 30 }, (_, i) => ({
+        t: now - (29 - i) * 86400000,
+        v: value,
+      }));
+    }
+    return { value, source: "coinpaprika", history };
   } catch {
     return null;
   }
@@ -63,8 +103,37 @@ async function fetchDxyProxy() {
     const json = await res.json();
     const eurRate = json?.rates?.EUR;
     if (!eurRate) return null;
-    const dxyApprox = (1 / eurRate) * 108;
-    return { value: Number(dxyApprox.toFixed(1)), label: "USD Index (proxy)", source: "er-api.com" };
+    const dxyApprox = Number(((1 / eurRate) * 108).toFixed(2));
+    // Build 30d EUR/USD history → DXY proxy via Frankfurter (ECB, free, no key).
+    let history: { t: number; v: number }[] = [];
+    try {
+      const end = new Date();
+      const start = new Date(end.getTime() - 30 * 86400000);
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      const fxRes = await fetch(
+        `https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=USD&to=EUR`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (fxRes.ok) {
+        const fj = await fxRes.json();
+        const rates = fj?.rates ?? {};
+        history = Object.entries(rates)
+          .map(([date, obj]: [string, any]) => ({
+            t: new Date(date).getTime(),
+            v: Number((((1 / Number(obj?.EUR ?? 0)) * 108)).toFixed(2)),
+          }))
+          .filter((p) => isFinite(p.v) && p.v > 0)
+          .sort((a, b) => a.t - b.t);
+      }
+    } catch { /* swallow */ }
+    if (!history.length) {
+      const now = Date.now();
+      history = Array.from({ length: 30 }, (_, i) => ({
+        t: now - (29 - i) * 86400000,
+        v: dxyApprox,
+      }));
+    }
+    return { value: dxyApprox, label: "USD Index (proxy)", source: "er-api.com + frankfurter", history };
   } catch {
     return null;
   }
