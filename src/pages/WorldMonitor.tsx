@@ -134,7 +134,7 @@ function fngIntel(v: number) {
 
 function dxyIntel(v: number, delta: number | null) {
   const rising = (delta ?? 0) > 0.5;
-  const falling = (delta ?N= 0) < -0.5;
+  const falling = (delta ?? 0) < -0.5;
   return {
     headline: rising
       ? "Strong dollar = headwind for SOL and risk crypto."
