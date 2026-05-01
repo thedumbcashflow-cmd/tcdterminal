@@ -190,11 +190,32 @@ const Admin = () => {
   if (!isAdmin) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center">
+        <div className="text-center max-w-sm">
           <Shield className="h-8 w-8 text-destructive mx-auto mb-3" />
           <h2 className="font-serif text-lg font-bold text-foreground">Access Denied</h2>
           <p className="mt-2 text-sm text-muted-foreground">Admin role required.</p>
-          <button onClick={() => navigate("/dashboard")} className="mt-4 text-xs text-primary hover:underline">← Back to Terminal</button>
+          <p className="mt-1 text-[10px] text-muted-foreground font-data">
+            Signed in as {user?.email || "—"}
+          </p>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <button
+              onClick={async () => {
+                setChecking(true);
+                await supabase.auth.refreshSession();
+                const [{ data: adminRole }, { data: modRole }] = await Promise.all([
+                  supabase.rpc("has_role", { _user_id: user!.id, _role: "admin" }),
+                  supabase.rpc("has_role", { _user_id: user!.id, _role: "moderator" }),
+                ]);
+                setIsAdmin(!!adminRole || !!modRole);
+                setRole(adminRole ? "admin" : modRole ? "moderator" : null);
+                setChecking(false);
+              }}
+              className="border border-primary bg-primary/10 px-3 py-1 text-xs font-bold text-primary hover:bg-primary/20"
+            >
+              Re-check Permissions
+            </button>
+            <button onClick={() => navigate("/dashboard")} className="text-xs text-primary hover:underline">← Back to Terminal</button>
+          </div>
         </div>
       </div>
     );
