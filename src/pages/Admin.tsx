@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import TerminalCard from "@/components/TerminalCard";
 import { format } from "date-fns";
-import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock, FlaskConical } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock, FlaskConical, ScrollText } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import TierPreview from "@/components/admin/TierPreview";
+import AuditLog from "@/components/admin/AuditLog";
 
 type MarketIntel = Tables<"market_intel">;
 
@@ -25,7 +26,7 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
   const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
@@ -254,7 +255,7 @@ const Admin = () => {
             "roles",
             "requests",
             "monitoring",
-            ...(role === "admin" ? (["tier-preview"] as const) : []),
+            ...(role === "admin" ? (["audit", "tier-preview"] as const) : []),
           ] as const
         ).map((tab) => (
           <button
@@ -268,6 +269,7 @@ const Admin = () => {
             {tab === "roles" && "User Roles"}
             {tab === "requests" && "Requests Queue"}
             {tab === "monitoring" && "Monitoring"}
+            {tab === "audit" && (<><ScrollText className="h-3 w-3" /> Audit Log</>)}
             {tab === "tier-preview" && (<><FlaskConical className="h-3 w-3" /> Tier Preview</>)}
           </button>
         ))}
@@ -625,6 +627,11 @@ const Admin = () => {
               </div>
             </TerminalCard>
           </>
+        )}
+
+        {/* AUDIT LOG TAB — admin only */}
+        {activeTab === "audit" && role === "admin" && (
+          <AuditLog />
         )}
 
         {/* TIER PREVIEW TAB — admin only (extra defense-in-depth check) */}
