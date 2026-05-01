@@ -42,3 +42,4 @@ Updated: just now
 - [Data Room Analytics](mem://features/data-room-analytics) — Deep-dive DeFiLlama/GeckoTerminal data for Pro/Whale
 - [Edge Function CORS](mem://tech/edge-function-cors) — Strict origin allowlist across all edge functions, no wildcards
 - [Tier Preview Tool](mem://admin/tier-preview-tool) — Admin-only RLS simulation panel in /admin
+- [Admin Audit Log](mem://security/admin-audit-log) — admin_audit_log table + triggers for role + market_intel changes; NULL-safe has_role
