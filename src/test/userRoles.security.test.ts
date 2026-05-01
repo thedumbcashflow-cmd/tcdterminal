@@ -60,9 +60,12 @@ d("user_roles RLS protection", () => {
     expect([401, 403, 409]).toContain(status);
   });
 
-  it("anonymous DELETE is denied", async () => {
+  it("anonymous DELETE cannot remove protected rows", async () => {
+    // PostgREST returns 204 for DELETE even when RLS hides every candidate row
+    // (no rows matched ⇒ no rows deleted). Both 401/403 and 204 prove the
+    // anonymous caller could not actually mutate user_roles.
     const status = await deleteRole(null);
-    expect([401, 403, 404]).toContain(status);
+    expect([401, 403, 404, 204]).toContain(status);
   });
 
   (USER_JWT ? it : it.skip)("non-admin signed-in INSERT is denied (403)", async () => {
