@@ -60,8 +60,16 @@ Schema: `id, created_at, actor_user_id, action, target_table, target_id, old_val
 
 | Policy | Cmd | Effect |
 |---|---|---|
-| `Admins can read audit log` | SELECT | Admins only. |
-| `Block client writes audit log` | ALL (RESTRICTIVE) | Hard `false` — clients can never INSERT/UPDATE/DELETE. Triggers (SECURITY DEFINER) are the only writers. |
+| `admin_audit_log_read` | SELECT | Permissive, admins only (`has_role(uid, 'admin')`). No moderator path. |
+| `admin_audit_log_block_insert` | INSERT (RESTRICTIVE) | `false` — clients can never INSERT. SECURITY DEFINER triggers bypass RLS and remain the only writers. |
+| `admin_audit_log_block_update` | UPDATE (RESTRICTIVE) | `false` — append-only, no edits. |
+| `admin_audit_log_block_delete` | DELETE (RESTRICTIVE) | `false` — append-only, no deletes. |
+
+> Do NOT use `FOR ALL AS RESTRICTIVE` on this table — it blocks SELECT for admins too. Use one policy per write command.
+
+### Search / paging
+
+`public.search_admin_audit_log(p_search, p_action, p_actor, p_from, p_to, p_limit, p_offset)` is a SECURITY DEFINER RPC (admin-gated internally) that returns paginated rows with `total_count` for "page X of Y". The Admin → Audit Log tab uses this for server-side pagination + free-text search across actor name, action, target, and JSONB before/after values.
 
 ### Recorded actions
 
@@ -76,11 +84,11 @@ Schema: `id, created_at, actor_user_id, action, target_table, target_id, old_val
 
 - `SECURITY DEFINER`, `STABLE`, `search_path = public`.
 - **Hardened**: returns `false` when either argument is NULL. Prevents NULL-bypass in policies that depend on it.
-- EXECUTE is revoked from `PUBLIC, anon, authenticated` — only invoked through RLS expressions and triggers, never via PostgREST RPC.
+- EXECUTE is granted to `authenticated` (not `anon`/`PUBLIC`). This is required because `has_role` is referenced inside RLS expressions across the schema and is also called by client tier checks. Revoking it from `authenticated` causes "permission denied for function has_role" and breaks every admin/whale/pro experience. The accepted lint warning is documented in security memory.
 
 ### `get_subscription_tier(_user_id uuid) → subscription_tier`
 
-- `SECURITY DEFINER`, EXECUTE locked down. Used inside RLS expressions on tier-gated tables.
+- `SECURITY DEFINER`. EXECUTE granted to `authenticated` for the same reason — used in tier-gated RLS expressions and client tier checks.
 
 ### `prevent_tier_self_modification()` (trigger on `profiles`)
 
@@ -90,10 +98,14 @@ Schema: `id, created_at, actor_user_id, action, target_table, target_id, old_val
 
 - Caps free users at 5 watchlist items.
 
+### `search_admin_audit_log(...)` — admin-only RPC
+
+- `SECURITY DEFINER`. Self-checks `has_role(auth.uid(), 'admin')` and raises `admin role required` for non-admins.
+- Powers server-side pagination + free-text search in the Admin → Audit Log tab.
+
 ### `test_user_roles_protection() → setof (test_name, passed, detail)`
 
-- Admin-only smoke test. Verifies RESTRICTIVE policies, NULL-safety of `has_role`, audit triggers, and creator's admin role.
-- Run from SQL editor: `SELECT * FROM public.test_user_roles_protection();`
+- Admin-only smoke test. EXECUTE revoked from PUBLIC/anon/authenticated; run via service role / SQL editor.
 
 ---
 
