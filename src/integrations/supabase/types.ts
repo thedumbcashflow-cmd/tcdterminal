@@ -294,6 +294,29 @@ export type Database = {
         }
         Returns: boolean
       }
+      search_admin_audit_log: {
+        Args: {
+          p_action?: string
+          p_actor?: string
+          p_from?: string
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_to?: string
+        }
+        Returns: {
+          action: string
+          actor_name: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          new_values: Json
+          old_values: Json
+          target_id: string
+          target_table: string
+          total_count: number
+        }[]
+      }
       test_user_roles_protection: {
         Args: never
         Returns: {
