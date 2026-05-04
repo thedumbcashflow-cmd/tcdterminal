@@ -148,6 +148,7 @@ const Landing = () => {
           Get Started
         </button>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
