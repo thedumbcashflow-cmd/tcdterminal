@@ -30,6 +30,7 @@ const Landing = () => {
         </div>
       </header>
 
+      <main>
       {/* Hero */}
       <section className="px-6 py-16 md:py-24 text-center max-w-3xl mx-auto">
         <div className="inline-block border border-primary/30 bg-primary/5 px-3 py-1 text-[10px] uppercase tracking-widest text-primary mb-6">
