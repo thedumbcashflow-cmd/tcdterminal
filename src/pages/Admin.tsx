@@ -245,7 +245,7 @@ const Admin = () => {
         </div>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-data">
           <span>Last refresh: {format(lastRefresh, "HH:mm:ss")}</span>
-          {role === "admin" && null}
+          
           <button onClick={() => { fetchRecords(); fetchRolesData(); fetchFeatureRequests(); fetchSyncData(); }} className="border border-border px-2 py-1 hover:text-primary transition-colors">
             <RefreshCw className="h-3 w-3" />
           </button>
