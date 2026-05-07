@@ -57,12 +57,27 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
+
+    // Validate JWT — reject anon key / unauthenticated callers.
+    const supabaseAuth = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+    }
+    const userId = claimsData.claims.sub;
 
     const { asset_symbol } = await req.json().catch(() => ({}));
 
@@ -71,11 +86,18 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Determine paywall tier — only pro/whale see premium intel.
+    const { data: profile } = await supabaseAdmin
+      .from("profiles").select("subscription_tier").eq("id", userId).maybeSingle();
+    const isPaid = profile?.subscription_tier === "pro" || profile?.subscription_tier === "whale";
+
     let query = supabaseAdmin
       .from("market_intel")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(100);
+
+    if (!isPaid) query = query.eq("is_premium", false);
 
     if (asset_symbol && typeof asset_symbol === "string" && asset_symbol.length <= 32) {
       query = query.eq("asset_symbol", asset_symbol);
