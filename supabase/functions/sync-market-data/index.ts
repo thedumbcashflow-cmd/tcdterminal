@@ -55,6 +55,40 @@ serve(async (req) => {
     });
   }
 
+  // Auth: accept EITHER a valid X-Cron-Secret (for pg_cron) OR an admin JWT (for Admin UI).
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const providedCron = req.headers.get("X-Cron-Secret");
+  const cronOk = !!cronSecret && providedCron === cronSecret;
+
+  let adminOk = false;
+  const authHeader = req.headers.get("Authorization");
+  if (!cronOk && authHeader?.startsWith("Bearer ")) {
+    try {
+      const supabaseAuth = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const token = authHeader.replace("Bearer ", "");
+      const { data: claimsData } = await supabaseAuth.auth.getClaims(token);
+      const userId = claimsData?.claims?.sub;
+      if (userId) {
+        const { data: isAdmin } = await supabaseAuth.rpc("has_role", {
+          _user_id: userId, _role: "admin",
+        });
+        adminOk = !!isAdmin;
+      }
+    } catch (e) {
+      console.error("sync-market-data admin check failed:", e);
+    }
+  }
+
+  if (!cronOk && !adminOk) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
+    });
+  }
+
   const startTime = Date.now();
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
