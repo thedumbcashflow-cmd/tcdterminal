@@ -164,14 +164,7 @@ const Admin = () => {
   const runSyncNow = async () => {
     setRunningSyncNow(true);
     try {
-      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-market-data`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({}),
-      });
+      await supabase.functions.invoke("sync-market-data", { body: {} });
       await fetchSyncData();
     } catch (e) {
       console.error("Sync failed:", e);
