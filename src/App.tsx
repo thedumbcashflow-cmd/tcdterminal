@@ -21,6 +21,7 @@ const DePINTracker = lazy(() => import("./pages/DePINTracker"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Settings = lazy(() => import("./pages/Settings"));
 const WorldMonitor = lazy(() => import("./pages/WorldMonitor"));
+const TokenCatalyst = lazy(() => import("./pages/TokenCatalyst"));
 const ChatBubble = lazy(() => import("./components/ChatBubble"));
 
 const queryClient = new QueryClient();
@@ -97,6 +98,15 @@ const App = () => (
               element={
                 <AuthGuard>
                   <WorldMonitor />
+                  <ChatBubble />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/token-catalyst"
+              element={
+                <AuthGuard>
+                  <TokenCatalyst />
                   <ChatBubble />
                 </AuthGuard>
               }
