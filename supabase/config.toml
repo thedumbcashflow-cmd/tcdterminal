@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.macro-snapshot]
 verify_jwt = false
+
+[functions.solscan-proxy]
+verify_jwt = false
