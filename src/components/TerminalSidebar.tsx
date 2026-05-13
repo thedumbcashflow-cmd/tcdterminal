@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut, Globe, Coins } from "lucide-react";
+import { BarChart3, Waves, Flame, Database, Lock, Settings, Activity, Cpu, Menu, X, CreditCard, Shield, LogOut, Globe, Coins, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscriptionTier } from "@/hooks/useSubscriptionTier";
@@ -93,6 +93,7 @@ const TerminalSidebar = ({ activeItem = "dashboard" }: { activeItem?: string }) 
           <SidebarItem icon={<Activity className="h-3.5 w-3.5" />} label="Network Health" active={activeItem === "network-health"} onClick={() => navTo("/network-health")} />
           <SidebarItem icon={<Cpu className="h-3.5 w-3.5" />} label="DePIN Tracker" active={activeItem === "depin-tracker"} onClick={() => navTo("/depin-tracker")} />
           <SidebarItem icon={<Coins className="h-3.5 w-3.5" />} label="Token Catalyst" active={activeItem === "token-catalyst"} onClick={() => navTo("/token-catalyst")} />
+          <SidebarItem icon={<BarChart2 className="h-3.5 w-3.5" />} label="Financial Models" active={activeItem === "financial-models"} onClick={() => navTo("/financial-models")} />
           <SidebarItem
             icon={<Globe className="h-3.5 w-3.5" />}
             label="World Monitor"
