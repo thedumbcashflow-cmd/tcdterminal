@@ -22,6 +22,7 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 const Settings = lazy(() => import("./pages/Settings"));
 const WorldMonitor = lazy(() => import("./pages/WorldMonitor"));
 const TokenCatalyst = lazy(() => import("./pages/TokenCatalyst"));
+const FinancialModels = lazy(() => import("./pages/FinancialModels"));
 const ChatBubble = lazy(() => import("./components/ChatBubble"));
 
 const queryClient = new QueryClient();
@@ -107,6 +108,15 @@ const App = () => (
               element={
                 <AuthGuard>
                   <TokenCatalyst />
+                  <ChatBubble />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/financial-models"
+              element={
+                <AuthGuard>
+                  <FinancialModels />
                   <ChatBubble />
                 </AuthGuard>
               }
