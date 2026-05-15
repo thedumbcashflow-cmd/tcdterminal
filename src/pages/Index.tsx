@@ -4,26 +4,52 @@ import TerminalCard from "@/components/TerminalCard";
 import LiveTicker from "@/components/LiveTicker";
 import WhaleFlowTable from "@/components/WhaleFlowTable";
 import LiquidationHeatmap from "@/components/LiquidationHeatmap";
-import { TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-react";
+import { useSolanaStats } from "@/hooks/useSolanaStats";
+
+const fmtUsd = (n: number | null, compact = false): string => {
+  if (n == null || isNaN(n)) return "—";
+  if (compact) {
+    if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+    if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+    return `$${n.toFixed(2)}`;
+  }
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+const fmtNum = (n: number | null, decimals = 0): string => {
+  if (n == null || isNaN(n)) return "—";
+  return n.toLocaleString(undefined, { maximumFractionDigits: decimals });
+};
+const fmtPct = (n: number | null): string => {
+  if (n == null || isNaN(n)) return "—";
+  return `${n.toFixed(1)}%`;
+};
+
+const Spin = () => <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />;
 
 const MetricCard = ({
   label,
   value,
   change,
   icon,
+  loading,
 }: {
   label: string;
   value: string;
-  change?: number;
+  change?: number | null;
   icon: React.ReactNode;
+  loading?: boolean;
 }) => (
   <div className="border border-border bg-card p-3">
     <div className="flex items-center justify-between">
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
       {icon}
     </div>
-    <div className="mt-1 font-data text-xl font-bold text-foreground">{value}</div>
-    {change !== undefined && (
+    <div className="mt-1 font-data text-xl font-bold text-foreground">
+      {loading ? <Spin /> : value}
+    </div>
+    {change !== undefined && change !== null && !loading && (
       <div
         className={`mt-0.5 font-data text-xs ${
           change >= 0 ? "text-terminal-green" : "text-terminal-red"
@@ -32,10 +58,56 @@ const MetricCard = ({
         {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(2)}% 24h
       </div>
     )}
+    {(change === null || change === undefined) && !loading && (
+      <div className="mt-0.5 font-data text-xs text-muted-foreground">—</div>
+    )}
   </div>
 );
 
 const Index = () => {
+  const stats = useSolanaStats(30_000);
+
+  const networkRows = [
+    {
+      label: "Slot Height",
+      value: stats.epochInfo ? fmtNum(stats.epochInfo.absoluteSlot) : "—",
+      pct: stats.epochInfo ? Math.min(100, (stats.epochInfo.absoluteSlot % 1_000_000) / 10_000) : 0,
+    },
+    {
+      label: "Epoch",
+      value: stats.epochInfo ? `${stats.epochInfo.epoch} · ${stats.epochInfo.pct.toFixed(1)}%` : "—",
+      pct: stats.epochInfo?.pct ?? 0,
+    },
+    {
+      label: "Active Validators",
+      value: stats.activeValidators != null ? fmtNum(stats.activeValidators) : "—",
+      pct:
+        stats.totalValidators && stats.activeValidators
+          ? (stats.activeValidators / stats.totalValidators) * 100
+          : 0,
+    },
+    {
+      label: "Stake Rate",
+      value: stats.stakeRatePct != null ? fmtPct(stats.stakeRatePct) : "—",
+      pct: stats.stakeRatePct ?? 0,
+    },
+  ];
+
+  const sysStatus = [
+    {
+      label: "Solscan API",
+      status: stats.error ? "ERROR" : stats.loading ? "POLLING…" : "CONNECTED",
+      ok: !stats.error,
+    },
+    {
+      label: "RPC Node",
+      status: stats.epochInfo ? "OPERATIONAL" : stats.loading ? "CONNECTING…" : "OFFLINE",
+      ok: !!stats.epochInfo,
+    },
+    { label: "Sheet Sync", status: "LAST: 2m AGO", ok: true },
+    { label: "Helius API", status: "CONNECTED", ok: true },
+  ];
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <TopBar />
@@ -43,31 +115,61 @@ const Index = () => {
         <TerminalSidebar />
         <main className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-auto p-3">
-            {/* Metric Row */}
+            {stats.error && (
+              <div className="mb-3 flex items-center justify-between border border-terminal-red/40 bg-terminal-red/10 px-3 py-2 text-xs text-terminal-red">
+                <span>Data fetch error: {stats.error}</span>
+                <button
+                  onClick={stats.refresh}
+                  className="border border-terminal-red/40 px-2 py-0.5 font-data text-[10px] uppercase tracking-wider hover:bg-terminal-red/20"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* KPI Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mb-3">
               <MetricCard
                 label="SOL Price"
-                value="$178.42"
-                change={3.21}
-                icon={<TrendingUp className="h-3.5 w-3.5 text-terminal-green" />}
+                value={fmtUsd(stats.solPrice)}
+                change={stats.solChange24h}
+                loading={stats.loading && stats.solPrice == null}
+                icon={
+                  (stats.solChange24h ?? 0) >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-terminal-green" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-terminal-red" />
+                  )
+                }
               />
               <MetricCard
-                label="REV (24h)"
-                value="$2.4M"
-                change={12.5}
+                label="Validators"
+                value={
+                  stats.activeValidators != null && stats.totalValidators != null
+                    ? `${fmtNum(stats.activeValidators)} / ${fmtNum(stats.totalValidators)}`
+                    : "—"
+                }
+                loading={stats.loading && stats.activeValidators == null}
                 icon={<DollarSign className="h-3.5 w-3.5 text-primary" />}
               />
               <MetricCard
                 label="Non-Vote TPS"
-                value="3,847"
-                change={-1.2}
+                value={fmtNum(stats.tpsNonVote)}
+                loading={stats.loading && stats.tpsNonVote == null}
                 icon={<Activity className="h-3.5 w-3.5 text-accent" />}
               />
               <MetricCard
-                label="USDC Velocity"
-                value="$847M"
-                change={5.67}
-                icon={<TrendingUp className="h-3.5 w-3.5 text-terminal-green" />}
+                label="USDC Vol 24h"
+                value={fmtUsd(stats.usdcVol24h, true)}
+                change={stats.usdcChange24h}
+                loading={stats.loading && stats.usdcVol24h == null}
+                icon={
+                  (stats.usdcChange24h ?? 0) >= 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5 text-terminal-green" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5 text-terminal-red" />
+                  )
+                }
               />
             </div>
 
@@ -77,18 +179,15 @@ const Index = () => {
 
               <TerminalCard title="Network Health">
                 <div className="space-y-3">
-                  {[
-                    { label: "Slot Height", value: "284,392,741", pct: 95 },
-                    { label: "Epoch", value: "612", pct: 62 },
-                    { label: "Active Validators", value: "1,847", pct: 85 },
-                    { label: "Stake Rate", value: "67.3%", pct: 67 },
-                  ].map((item, i) => (
+                  {networkRows.map((item, i) => (
                     <div key={i}>
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                           {item.label}
                         </span>
-                        <span className="font-data text-sm font-bold text-foreground">{item.value}</span>
+                        <span className="font-data text-sm font-bold text-foreground">
+                          {stats.loading && item.value === "—" ? <Spin /> : item.value}
+                        </span>
                       </div>
                       <div className="mt-1 h-0.5 w-full bg-secondary">
                         <div
@@ -98,6 +197,11 @@ const Index = () => {
                       </div>
                     </div>
                   ))}
+                  {stats.lastUpdated && (
+                    <div className="pt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Updated {stats.lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </div>
+                  )}
                 </div>
               </TerminalCard>
 
@@ -129,12 +233,7 @@ const Index = () => {
 
               <TerminalCard title="System Status">
                 <div className="space-y-2">
-                  {[
-                    { label: "Data Feed", status: "OPERATIONAL", ok: true },
-                    { label: "RPC Node", status: "OPERATIONAL", ok: true },
-                    { label: "Sheet Sync", status: "LAST: 2m AGO", ok: true },
-                    { label: "Helius API", status: "CONNECTED", ok: true },
-                  ].map((s, i) => (
+                  {sysStatus.map((s, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">{s.label}</span>
                       <div className="flex items-center gap-1.5">
