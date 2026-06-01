@@ -500,7 +500,17 @@ const FinancialModels = () => {
                         })}
                       </div>
                     )}
-                    {!mcResult && !mcRunning && (
+                    {mcError && (
+                      <div className="py-3 text-center text-[11px] text-terminal-red font-data uppercase tracking-wider">
+                        {mcError}
+                      </div>
+                    )}
+                    {mcResult?.elapsedMs != null && (
+                      <div className="mt-2 text-[9px] text-muted-foreground font-data uppercase tracking-wider text-right">
+                        Server compute: {mcResult.elapsedMs}ms
+                      </div>
+                    )}
+                    {!mcResult && !mcRunning && !mcError && (
                       <div className="py-8 text-center text-[11px] text-muted-foreground">Run a simulation to render the IRR distribution.</div>
                     )}
                   </div>
