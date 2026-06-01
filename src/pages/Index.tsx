@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import TopBar from "@/components/TopBar";
 import TerminalSidebar from "@/components/TerminalSidebar";
 import TerminalCard from "@/components/TerminalCard";
@@ -6,6 +7,10 @@ import WhaleFlowTable from "@/components/WhaleFlowTable";
 import LiquidationHeatmap from "@/components/LiquidationHeatmap";
 import { Loader2, TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-react";
 import { useSolanaStats } from "@/hooks/useSolanaStats";
+import { supabase } from "@/integrations/supabase/client";
+
+interface HealthProbe { ok: boolean; status: string; latencyMs?: number | null; lastRunAt?: string | null; ageSec?: number | null; detail?: string; }
+interface HealthResponse { helius: HealthProbe; sheetSync: HealthProbe; checkedAt: string; }
 
 const fmtUsd = (n: number | null, compact = false): string => {
   if (n == null || isNaN(n)) return "—";
@@ -66,6 +71,22 @@ const MetricCard = ({
 
 const Index = () => {
   const stats = useSolanaStats(30_000);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [healthLoading, setHealthLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const probe = async () => {
+      setHealthLoading(true);
+      const { data, error } = await supabase.functions.invoke("health-check");
+      if (cancelled) return;
+      if (!error && data) setHealth(data as HealthResponse);
+      setHealthLoading(false);
+    };
+    probe();
+    const id = setInterval(probe, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   const networkRows = [
     {
@@ -104,8 +125,16 @@ const Index = () => {
       status: stats.epochInfo ? "OPERATIONAL" : stats.loading ? "CONNECTING…" : "OFFLINE",
       ok: !!stats.epochInfo,
     },
-    { label: "Sheet Sync", status: "LAST: 2m AGO", ok: true },
-    { label: "Helius API", status: "CONNECTED", ok: true },
+    {
+      label: "Sheet Sync",
+      status: healthLoading ? "PROBING…" : (health?.sheetSync?.status ?? "UNKNOWN"),
+      ok: !!health?.sheetSync?.ok,
+    },
+    {
+      label: "Helius API",
+      status: healthLoading ? "PROBING…" : (health?.helius?.status ?? "UNKNOWN"),
+      ok: !!health?.helius?.ok,
+    },
   ];
 
   return (
