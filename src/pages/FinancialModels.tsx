@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Play, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import TopBar from "@/components/TopBar";
 import TerminalSidebar from "@/components/TerminalSidebar";
 import TerminalCard from "@/components/TerminalCard";
@@ -41,20 +42,13 @@ const fmtUsd = (n: number) => {
   return `$${n.toFixed(2)}`;
 };
 
-// ---------- Box-Muller for Monte Carlo ----------
-const randNorm = () => {
-  let u = 0, v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-};
-
 const FinancialModels = () => {
   const navigate = useNavigate();
   const [active, setActive] = useState<ModelKey>("rdcf");
   const [inputs, setInputs] = useState<Record<ModelKey, Record<string, number>>>(DEFAULTS);
-  const [mcResult, setMcResult] = useState<{ p10: number; p50: number; p90: number; bins: number[]; binEdges: number[] } | null>(null);
+  const [mcResult, setMcResult] = useState<{ p10: number; p50: number; p90: number; bins: number[]; binEdges: number[]; elapsedMs?: number } | null>(null);
   const [mcRunning, setMcRunning] = useState(false);
+  const [mcError, setMcError] = useState<string | null>(null);
 
   const v = inputs[active];
   const setV = (k: string, val: number) => setInputs((s) => ({ ...s, [active]: { ...s[active], [k]: val } }));
@@ -134,38 +128,26 @@ const FinancialModels = () => {
     return r;
   }, [inputs]);
 
-  const runMonteCarlo = () => {
+  const runMonteCarlo = async () => {
     setMcRunning(true);
     setMcResult(null);
+    setMcError(null);
     const i = inputs.mc;
-    const N = Math.min(10000, Math.max(100, Math.floor(i.simulations)));
-    const results: number[] = new Array(N);
-    const chunk = 1000;
-    let done = 0;
-    const step = () => {
-      const end = Math.min(done + chunk, N);
-      for (let k = done; k < end; k++) results[k] = i.baseIrr + randNorm() * i.stdDev;
-      done = end;
-      if (done < N) {
-        setTimeout(step, 0);
-      } else {
-        results.sort((a, b) => a - b);
-        const p = (q: number) => results[Math.floor(q * (N - 1))];
-        // Histogram
-        const min = results[0], max = results[N - 1];
-        const bucketCount = 20;
-        const width = (max - min) / bucketCount || 1;
-        const bins = new Array(bucketCount).fill(0);
-        const binEdges = new Array(bucketCount + 1).fill(0).map((_, idx) => min + idx * width);
-        for (const x of results) {
-          const idx = Math.min(bucketCount - 1, Math.floor((x - min) / width));
-          bins[idx]++;
-        }
-        setMcResult({ p10: p(0.1), p50: p(0.5), p90: p(0.9), bins, binEdges });
-        setMcRunning(false);
-      }
-    };
-    setTimeout(step, 0);
+    try {
+      const { data, error } = await supabase.functions.invoke("monte-carlo", {
+        body: { baseIrr: i.baseIrr, stdDev: i.stdDev, simulations: i.simulations },
+      });
+      if (error) throw error;
+      if (!data || typeof data.p50 !== "number") throw new Error("Invalid simulation response");
+      setMcResult({
+        p10: data.p10, p50: data.p50, p90: data.p90,
+        bins: data.bins, binEdges: data.binEdges, elapsedMs: data.elapsedMs,
+      });
+    } catch (e: any) {
+      setMcError(e?.message || "Simulation failed");
+    } finally {
+      setMcRunning(false);
+    }
   };
 
   // ---------- KPI strips per model ----------
