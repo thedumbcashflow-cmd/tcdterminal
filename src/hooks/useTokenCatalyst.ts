@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type SolscanEndpoint = "meta" | "markets" | "price" | "holders" | "transfers" | "defi" | "trending";
+export type SolscanEndpoint =
+  | "meta" | "markets" | "price" | "holders" | "transfers" | "defi" | "trending"
+  | "holders-change" | "top-holders" | "dex-trades" | "wallet-pnl";
 
 interface State<T> { data: T | null; loading: boolean; error: string | null; tierLocked: boolean; }
 const empty = <T,>(): State<T> => ({ data: null, loading: false, error: null, tierLocked: false });
@@ -25,6 +27,10 @@ export function useTokenCatalyst(address: string) {
   const [holders, setHolders] = useState<State<any>>(empty());
   const [transfers, setTransfers] = useState<State<any>>(empty());
   const [defi, setDefi] = useState<State<any>>(empty());
+  const [holdersChange, setHoldersChange] = useState<State<any>>(empty());
+  const [topHolders, setTopHolders] = useState<State<any>>(empty());
+  const [dexTrades, setDexTrades] = useState<State<any>>(empty());
+  const [walletPnl, setWalletPnl] = useState<State<any>>(empty());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const run = useCallback(async <T,>(
@@ -50,11 +56,19 @@ export function useTokenCatalyst(address: string) {
       run("holders", { address, page: 1, page_size: 20 }, setHolders),
       run("transfers", { address, page: 1, page_size: 25, sort_by: "block_time", sort_order: "desc" }, setTransfers),
       run("defi", { address, page: 1, page_size: 20 }, setDefi),
+      run("holders-change", { address, time: "24h" }, setHoldersChange),
+      run("top-holders", { address, page: 1, page_size: 20 }, setTopHolders),
+      run("dex-trades", { address, page: 1, page_size: 25, sort_by: "block_time", sort_order: "desc" }, setDexTrades),
     ]);
     setLastUpdated(new Date());
   }, [address, run]);
 
+  // Wallet PnL is opt-in (different param shape) — exposed via fetchWalletPnl(wallet)
+  const fetchWalletPnl = useCallback((wallet: string) => {
+    return run("wallet-pnl", { address: wallet }, setWalletPnl);
+  }, [run]);
+
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { meta, markets, holders, transfers, defi, lastUpdated, refresh };
+  return { meta, markets, holders, transfers, defi, holdersChange, topHolders, dexTrades, walletPnl, fetchWalletPnl, lastUpdated, refresh };
 }

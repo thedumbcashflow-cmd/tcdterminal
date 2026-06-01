@@ -13,13 +13,17 @@ const SOLSCAN_BASE = "https://pro-api.solscan.io/v2.0";
 // Whitelist of endpoints we expose. Free/trial users get meta+market only.
 type EndpointDef = { path: string; premium: boolean; ttl: number };
 const ENDPOINTS: Record<string, EndpointDef> = {
-  meta:        { path: "/token/meta",             premium: false, ttl: 300 },
-  markets:     { path: "/token/markets",          premium: false, ttl: 60 },
-  price:       { path: "/token/price",            premium: false, ttl: 60 },
-  holders:     { path: "/token/holders",          premium: true,  ttl: 120 },
-  transfers:   { path: "/token/transfer",         premium: true,  ttl: 30 },
-  defi:        { path: "/token/defi/activities",  premium: true,  ttl: 30 },
-  trending:    { path: "/token/trending",         premium: false, ttl: 120 },
+  meta:           { path: "/token/meta",                premium: false, ttl: 300 },
+  markets:        { path: "/token/markets",             premium: false, ttl: 60 },
+  price:          { path: "/token/price",               premium: false, ttl: 60 },
+  holders:        { path: "/token/holders",             premium: true,  ttl: 120 },
+  transfers:      { path: "/token/transfer",            premium: true,  ttl: 30 },
+  defi:           { path: "/token/defi/activities",     premium: true,  ttl: 30 },
+  trending:       { path: "/token/trending",            premium: false, ttl: 120 },
+  "holders-change": { path: "/token/holders/change",    premium: true,  ttl: 180 },
+  "top-holders":    { path: "/token/top_holders",       premium: true,  ttl: 180 },
+  "dex-trades":     { path: "/token/dex/trades",        premium: true,  ttl: 30 },
+  "wallet-pnl":     { path: "/account/portfolio/pnl",   premium: true,  ttl: 120 },
 };
 
 const cache = new Map<string, { at: number; body: unknown }>();
