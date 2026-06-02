@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Search, Lock, Loader2, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search, Lock, Loader2, ExternalLink, AlertCircle, ShieldCheck, ShieldAlert } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import TerminalSidebar from "@/components/TerminalSidebar";
 import TerminalCard from "@/components/TerminalCard";
@@ -33,6 +33,10 @@ const fmtNum = (n: number | null | undefined, d = 0) => {
 };
 const short = (s: string, n = 4) => s ? `${s.slice(0, n)}…${s.slice(-n)}` : "—";
 
+// Solana mint = base58, typically 32-44 chars, no 0/O/I/l
+const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const isValidMint = (s: string) => BASE58_RE.test(s.trim());
+
 const Locked = ({ label }: { label: string }) => (
   <div className="flex flex-col items-center justify-center py-6 text-center">
     <Lock className="h-4 w-4 text-muted-foreground mb-1.5" />
@@ -41,8 +45,8 @@ const Locked = ({ label }: { label: string }) => (
 );
 
 const ErrState = ({ msg }: { msg: string }) => (
-  <div className="flex items-center gap-1.5 py-4 text-[11px] text-terminal-red">
-    <AlertCircle className="h-3 w-3" /> {msg}
+  <div className="flex items-center gap-1.5 py-4 px-2 text-[11px] text-terminal-red">
+    <AlertCircle className="h-3 w-3 shrink-0" /> <span className="truncate">{msg}</span>
   </div>
 );
 
@@ -52,16 +56,35 @@ const Loading = () => (
   </div>
 );
 
+const AuthBadge = ({ label, addr }: { label: string; addr: string | null | undefined }) => {
+  const revoked = !addr;
+  return (
+    <span className={`inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-data uppercase tracking-wider ${
+      revoked
+        ? "border-terminal-green/40 bg-terminal-green/10 text-terminal-green"
+        : "border-terminal-red/40 bg-terminal-red/10 text-terminal-red"
+    }`}>
+      {revoked ? <ShieldCheck className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+      {label}: {revoked ? "Revoked" : short(addr, 4)}
+    </span>
+  );
+};
+
+const PAGE_STEP = 20;
+
 const TokenCatalyst = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(PRESETS[0]);
   const [customAddr, setCustomAddr] = useState("");
+  const [inputError, setInputError] = useState<string | null>(null);
+  const [holderLimit, setHolderLimit] = useState(PAGE_STEP);
+  const [transferLimit, setTransferLimit] = useState(PAGE_STEP);
   const address = selected.address;
 
   const { meta, markets, holders, transfers, defi, lastUpdated, refresh } = useTokenCatalyst(address);
 
   const m = meta.data || {};
-  const metaCore = m.data || m; // Solscan v2 wraps in {data}
+  const metaCore = m.data || m;
   const marketRows: any[] = markets.data?.data || markets.data || [];
   const holderRows: any[] = holders.data?.data?.items || holders.data?.data || holders.data || [];
   const transferRows: any[] = transfers.data?.data || transfers.data || [];
@@ -70,7 +93,6 @@ const TokenCatalyst = () => {
   const totalSupply = Number(metaCore?.supply || metaCore?.total_supply || 0);
   const decimals = Number(metaCore?.decimals || 0);
 
-  // Top holder concentration
   const topHolderPct = useMemo(() => {
     if (!Array.isArray(holderRows) || holderRows.length === 0 || !totalSupply) return null;
     const top10 = holderRows.slice(0, 10).reduce((acc, h) => acc + Number(h.amount || h.ui_amount || 0), 0);
@@ -81,7 +103,21 @@ const TokenCatalyst = () => {
 
   const submitCustom = () => {
     const a = customAddr.trim();
-    if (a.length >= 32) setSelected({ sym: short(a), name: "Custom", address: a });
+    if (!a) { setInputError("Enter a mint address"); return; }
+    if (!isValidMint(a)) {
+      setInputError("Invalid base58 mint (32–44 chars)");
+      return;
+    }
+    setInputError(null);
+    setHolderLimit(PAGE_STEP);
+    setTransferLimit(PAGE_STEP);
+    setSelected({ sym: short(a), name: "Custom", address: a });
+  };
+
+  const choosePreset = (p: typeof PRESETS[number]) => {
+    setHolderLimit(PAGE_STEP);
+    setTransferLimit(PAGE_STEP);
+    setSelected(p);
   };
 
   return (
@@ -120,7 +156,7 @@ const TokenCatalyst = () => {
                 {PRESETS.map((p) => (
                   <button
                     key={p.address}
-                    onClick={() => setSelected(p)}
+                    onClick={() => choosePreset(p)}
                     className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border transition-colors ${
                       selected.address === p.address
                         ? "border-primary bg-primary/10 text-primary"
@@ -131,16 +167,20 @@ const TokenCatalyst = () => {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 border border-border bg-card px-2">
-                <Search className="h-3 w-3 text-muted-foreground" />
-                <input
-                  value={customAddr}
-                  onChange={(e) => setCustomAddr(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submitCustom()}
-                  placeholder="Paste mint address…"
-                  className="bg-transparent px-1 py-1 text-xs text-foreground font-data outline-none w-72 max-w-full"
-                />
-                <button onClick={submitCustom} className="text-[10px] uppercase tracking-wider text-primary hover:underline px-1">Load</button>
+              <div className="flex flex-col">
+                <div className={`flex items-center gap-1 border bg-card px-2 ${inputError ? "border-terminal-red" : "border-border"}`}>
+                  <Search className="h-3 w-3 text-muted-foreground" />
+                  <input
+                    value={customAddr}
+                    onChange={(e) => { setCustomAddr(e.target.value); if (inputError) setInputError(null); }}
+                    onKeyDown={(e) => e.key === "Enter" && submitCustom()}
+                    placeholder="Paste any Solana mint address…"
+                    aria-invalid={!!inputError}
+                    className="bg-transparent px-1 py-1 text-xs text-foreground font-data outline-none w-72 max-w-full"
+                  />
+                  <button onClick={submitCustom} className="text-[10px] uppercase tracking-wider text-primary hover:underline px-1">Load</button>
+                </div>
+                {inputError && <span className="text-[10px] text-terminal-red font-data mt-0.5">{inputError}</span>}
               </div>
             </div>
 
@@ -158,24 +198,21 @@ const TokenCatalyst = () => {
               />
             </div>
 
-            {meta.error && !meta.tierLocked && (
-              <div className="mb-3 border border-terminal-red/30 bg-terminal-red/5 px-3 py-2 text-[11px] text-terminal-red font-data">
-                Solscan meta error: {meta.error}
-              </div>
-            )}
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {/* Meta panel */}
               <TerminalCard title="Token Meta">
-                {meta.loading ? <Loading /> : meta.error ? <ErrState msg={meta.error} /> : (
+                {meta.loading ? <Loading /> : (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1 px-1 text-[11px] font-data">
+                    {meta.error && <div className="col-span-2"><ErrState msg={meta.error} /></div>}
                     <Row k="Symbol" v={metaCore?.symbol} />
                     <Row k="Name" v={metaCore?.name} />
                     <Row k="Decimals" v={String(decimals)} />
                     <Row k="Supply" v={totalSupply ? fmtNum(totalSupply / Math.pow(10, decimals)) : "—"} />
                     <Row k="Created" v={metaCore?.first_mint_time ? format(new Date(metaCore.first_mint_time * 1000), "yyyy-MM-dd") : "—"} />
-                    <Row k="Mint Auth" v={metaCore?.mint_authority ? short(metaCore.mint_authority) : "Revoked"} />
-                    <Row k="Freeze Auth" v={metaCore?.freeze_authority ? short(metaCore.freeze_authority) : "Revoked"} />
+                    <div className="col-span-2 flex flex-wrap gap-1.5 pt-1">
+                      <AuthBadge label="Mint" addr={metaCore?.mint_authority} />
+                      <AuthBadge label="Freeze" addr={metaCore?.freeze_authority} />
+                    </div>
                     <div className="col-span-2 mt-1 flex items-center gap-2">
                       <a href={`https://solscan.io/token/${address}`} target="_blank" rel="noreferrer" className="text-[10px] text-primary uppercase tracking-wider flex items-center gap-1 hover:underline">
                         Solscan <ExternalLink className="h-3 w-3" />
@@ -187,7 +224,7 @@ const TokenCatalyst = () => {
 
               {/* Markets */}
               <TerminalCard title="Active Markets" headerRight={<span className="text-[10px] text-muted-foreground font-data">{marketRows.length} pairs</span>}>
-                {markets.loading ? <Loading /> : markets.error ? <ErrState msg={markets.error} /> : marketRows.length === 0 ? (
+                {markets.loading ? <Loading /> : markets.error && marketRows.length === 0 ? <ErrState msg={markets.error} /> : marketRows.length === 0 ? (
                   <div className="py-6 text-center text-[11px] text-muted-foreground">No markets reported.</div>
                 ) : (
                   <div className="max-h-64 overflow-auto">
@@ -206,62 +243,76 @@ const TokenCatalyst = () => {
               </TerminalCard>
 
               {/* Top Holders */}
-              <TerminalCard title="Top Holders" headerRight={<span className="text-[10px] text-muted-foreground font-data">{holderRows.length} shown</span>}>
+              <TerminalCard title="Top Holders" headerRight={<span className="text-[10px] text-muted-foreground font-data">{Math.min(holderLimit, holderRows.length)}/{holderRows.length}</span>}>
                 {holders.tierLocked ? <Locked label="Top Holders" /> :
-                 holders.loading ? <Loading /> : holders.error ? <ErrState msg={holders.error} /> : holderRows.length === 0 ? (
+                 holders.loading ? <Loading /> : holders.error && holderRows.length === 0 ? <ErrState msg={holders.error} /> : holderRows.length === 0 ? (
                   <div className="py-6 text-center text-[11px] text-muted-foreground">No holder data.</div>
                 ) : (
-                  <div className="max-h-64 overflow-auto">
-                    <div className="grid grid-cols-[40px_1fr_1fr_60px] border-b border-border px-1 py-1 text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
-                      <span>#</span><span>Address</span><span className="text-right">Amount</span><span className="text-right">%</span>
+                  <>
+                    <div className="max-h-64 overflow-auto">
+                      <div className="grid grid-cols-[40px_1fr_1fr_60px] border-b border-border px-1 py-1 text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
+                        <span>#</span><span>Address</span><span className="text-right">Amount</span><span className="text-right">%</span>
+                      </div>
+                      {holderRows.slice(0, holderLimit).map((h: any, i: number) => {
+                        const supplyUi = totalSupply / Math.pow(10, decimals);
+                        const amtUi = Number(h.ui_amount ?? (Number(h.amount || 0) / Math.pow(10, decimals)));
+                        const pct = supplyUi ? (amtUi / supplyUi) * 100 : 0;
+                        return (
+                          <div key={h.address || h.owner || i} className="grid grid-cols-[40px_1fr_1fr_60px] border-b border-border/30 px-1 py-1 text-[11px] font-data hover:bg-secondary/30">
+                            <span className="text-muted-foreground">{i + 1}</span>
+                            <a href={`https://solscan.io/account/${h.owner || h.address}`} target="_blank" rel="noreferrer" className="text-foreground hover:text-primary truncate">{short(h.owner || h.address, 5)}</a>
+                            <span className="text-right text-foreground">{fmtNum(amtUi, 2)}</span>
+                            <span className={`text-right ${pct > 5 ? "text-terminal-red" : "text-primary"}`}>{pct.toFixed(2)}%</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {holderRows.slice(0, 20).map((h: any, i: number) => {
-                      const supplyUi = totalSupply / Math.pow(10, decimals);
-                      const amtUi = Number(h.ui_amount ?? (Number(h.amount || 0) / Math.pow(10, decimals)));
-                      const pct = supplyUi ? (amtUi / supplyUi) * 100 : 0;
-                      return (
-                        <div key={h.address || h.owner || i} className="grid grid-cols-[40px_1fr_1fr_60px] border-b border-border/30 px-1 py-1 text-[11px] font-data hover:bg-secondary/30">
-                          <span className="text-muted-foreground">{i + 1}</span>
-                          <a href={`https://solscan.io/account/${h.owner || h.address}`} target="_blank" rel="noreferrer" className="text-foreground hover:text-primary truncate">{short(h.owner || h.address, 5)}</a>
-                          <span className="text-right text-foreground">{fmtNum(amtUi, 2)}</span>
-                          <span className={`text-right ${pct > 5 ? "text-terminal-red" : "text-primary"}`}>{pct.toFixed(2)}%</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    {holderLimit < holderRows.length && (
+                      <button onClick={() => setHolderLimit((n) => n + PAGE_STEP)} className="w-full border-t border-border py-1 text-[10px] uppercase tracking-wider text-primary hover:bg-secondary/30">
+                        Load more ({holderRows.length - holderLimit} remaining)
+                      </button>
+                    )}
+                  </>
                 )}
               </TerminalCard>
 
               {/* Recent Transfers */}
-              <TerminalCard title="Recent Transfers" headerRight={<span className="text-[10px] text-muted-foreground font-data">{transferRows.length}</span>}>
+              <TerminalCard title="Recent Transfers" headerRight={<span className="text-[10px] text-muted-foreground font-data">{Math.min(transferLimit, transferRows.length)}/{transferRows.length}</span>}>
                 {transfers.tierLocked ? <Locked label="Transfer flow" /> :
-                 transfers.loading ? <Loading /> : transfers.error ? <ErrState msg={transfers.error} /> : transferRows.length === 0 ? (
+                 transfers.loading ? <Loading /> : transfers.error && transferRows.length === 0 ? <ErrState msg={transfers.error} /> : transferRows.length === 0 ? (
                   <div className="py-6 text-center text-[11px] text-muted-foreground">No transfers.</div>
                 ) : (
-                  <div className="max-h-64 overflow-auto">
-                    <div className="grid grid-cols-[80px_1fr_1fr_1fr] border-b border-border px-1 py-1 text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
-                      <span>Time</span><span>From</span><span>To</span><span className="text-right">Amount</span>
+                  <>
+                    <div className="max-h-64 overflow-auto">
+                      <div className="grid grid-cols-[80px_1fr_1fr_1fr] border-b border-border px-1 py-1 text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
+                        <span>Time</span><span>From</span><span>To</span><span className="text-right">Amount</span>
+                      </div>
+                      {transferRows.slice(0, transferLimit).map((t: any, i: number) => {
+                        const ts = t.block_time ? new Date(t.block_time * 1000) : null;
+                        const amt = Number(t.amount ?? 0);
+                        return (
+                          <div key={t.trans_id || t.signature || i} className="grid grid-cols-[80px_1fr_1fr_1fr] border-b border-border/30 px-1 py-1 text-[11px] font-data hover:bg-secondary/30">
+                            <span className="text-muted-foreground">{ts ? format(ts, "HH:mm:ss") : "—"}</span>
+                            <span className="text-foreground truncate">{short(t.from_address || t.src, 4)}</span>
+                            <span className="text-foreground truncate">{short(t.to_address || t.dst, 4)}</span>
+                            <span className="text-right text-primary">{fmtNum(amt, 2)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {transferRows.slice(0, 25).map((t: any, i: number) => {
-                      const ts = t.block_time ? new Date(t.block_time * 1000) : null;
-                      const amt = Number(t.amount ?? 0) / Math.pow(10, t.token_decimals || decimals || 0);
-                      return (
-                        <div key={t.trans_id || t.signature || i} className="grid grid-cols-[80px_1fr_1fr_1fr] border-b border-border/30 px-1 py-1 text-[11px] font-data hover:bg-secondary/30">
-                          <span className="text-muted-foreground">{ts ? format(ts, "HH:mm:ss") : "—"}</span>
-                          <span className="text-foreground truncate">{short(t.from_address || t.src, 4)}</span>
-                          <span className="text-foreground truncate">{short(t.to_address || t.dst, 4)}</span>
-                          <span className="text-right text-primary">{fmtNum(amt, 2)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    {transferLimit < transferRows.length && (
+                      <button onClick={() => setTransferLimit((n) => n + PAGE_STEP)} className="w-full border-t border-border py-1 text-[10px] uppercase tracking-wider text-primary hover:bg-secondary/30">
+                        Load more ({transferRows.length - transferLimit} remaining)
+                      </button>
+                    )}
+                  </>
                 )}
               </TerminalCard>
 
               {/* DeFi activities */}
               <TerminalCard title="DeFi Activity" className="lg:col-span-2" headerRight={<span className="text-[10px] text-muted-foreground font-data">{defiRows.length} actions</span>}>
                 {defi.tierLocked ? <Locked label="DeFi activity" /> :
-                 defi.loading ? <Loading /> : defi.error ? <ErrState msg={defi.error} /> : defiRows.length === 0 ? (
+                 defi.loading ? <Loading /> : defi.error && defiRows.length === 0 ? <ErrState msg={defi.error} /> : defiRows.length === 0 ? (
                   <div className="py-6 text-center text-[11px] text-muted-foreground">No DeFi activity.</div>
                 ) : (
                   <div className="max-h-72 overflow-auto">
