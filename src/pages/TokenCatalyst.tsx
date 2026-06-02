@@ -100,7 +100,7 @@ const TokenCatalyst = () => {
                 <h1 className="font-serif text-sm font-bold text-primary uppercase tracking-wider">
                   Token Catalyst Deck — {selected.sym}
                 </h1>
-                <span className="text-[10px] text-muted-foreground font-data uppercase tracking-wider">via DexScreener</span>
+                <span className="text-[10px] text-muted-foreground font-data uppercase tracking-wider">DexScreener + Helius</span>
               </div>
               <div className="flex items-center gap-2">
                 {lastUpdated && (
