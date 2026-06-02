@@ -91,7 +91,16 @@ Deno.serve(async (req) => {
 
     if (!resp.ok) {
       console.error("Solscan error", resp.status, text.slice(0, 500));
-      return json(resp.status, { error: "Solscan upstream error", status: resp.status, detail: parsed });
+      // Return 200 with error payload so client hooks don't throw and blank the UI.
+      // 401 from Solscan = API key tier insufficient for this endpoint.
+      const code = resp.status === 401 ? "solscan_tier_insufficient" : "upstream_error";
+      return json(200, {
+        data: null,
+        error: "Solscan upstream error",
+        code,
+        upstreamStatus: resp.status,
+        detail: parsed,
+      });
     }
 
     cache.set(cacheKey, { at: Date.now(), body: parsed });
