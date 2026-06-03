@@ -36,18 +36,61 @@ const ChatBubble = () => {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    // Call the proxy with an explicit timeout so the UI never hangs
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 30_000);
+
     try {
-      const { data, error } = await supabase.functions.invoke("agent-proxy", {
-        body: { message: text, session: SESSION_ID, mode: "agent" },
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/agent-proxy`;
+      const resp = await fetch(url, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ message: text, session: SESSION_ID, mode: "agent" }),
       });
-      if (error) throw error;
-      const reply = extractReply(data) || "(empty response)";
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+
+      const reqId = resp.headers.get("x-request-id") || "—";
+      const raw = await resp.text();
+
+      if (resp.status === 429) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Rate limit reached. Please wait a moment and try again." }]);
+        return;
+      }
+      if (resp.status === 401) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Authentication required to use the agent." }]);
+        return;
+      }
+      if (resp.status === 504) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "Agent timed out. The backend took too long to respond." }]);
+        return;
+      }
+      if (!resp.ok) {
+        let detail = raw.slice(0, 240);
+        try { detail = JSON.parse(raw).error || detail; } catch { /* keep raw */ }
+        setMessages((prev) => [...prev, { role: "assistant", content: `Agent error (${resp.status}): ${detail}  [req ${reqId}]` }]);
+        return;
+      }
+
+      let parsed: any = null;
+      try { parsed = JSON.parse(raw); } catch {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Malformed response from agent. [req ${reqId}]` }]);
+        return;
+      }
+      const reply = extractReply(parsed);
+      setMessages((prev) => [...prev, { role: "assistant", content: reply || "(empty response)" }]);
     } catch (e: any) {
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${e?.message || "Connection error"}` }]);
+      const msg = e?.name === "AbortError" ? "Request timed out after 30s." : (e?.message || "Connection error");
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` }]);
+    } finally {
+      clearTimeout(timeoutId);
+      setLoading(false);
     }
-    setLoading(false);
   };
+
 
 
   return (
