@@ -1,6 +1,6 @@
 // Live system health probes for the dashboard. Checks Helius RPC and Sheet
 // Sync freshness without exposing admin-only tables to the client.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +10,7 @@ const corsHeaders = {
 const json = (s: number, b: unknown) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-async function probeHelius(): Promise<{ ok: boolean; status: string; latencyMs: number | null; detail?: string }> {
+async function probeHelius() {
   const key = Deno.env.get("HELIUS_API_KEY");
   const url = key
     ? `https://mainnet.helius-rpc.com/?api-key=${key}`
@@ -37,7 +37,7 @@ async function probeHelius(): Promise<{ ok: boolean; status: string; latencyMs: 
   }
 }
 
-async function probeSheetSync(): Promise<{ ok: boolean; status: string; lastRunAt: string | null; ageSec: number | null }> {
+async function probeSheetSync() {
   try {
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -48,13 +48,13 @@ async function probeSheetSync(): Promise<{ ok: boolean; status: string; lastRunA
       .select("job_name,last_run_at,status,error_message")
       .order("last_run_at", { ascending: false })
       .limit(5);
-    if (error) return { ok: false, status: "ERROR", lastRunAt: null, ageSec: null };
+    if (error) return { ok: false, status: "ERROR", lastRunAt: null, ageSec: null, detail: error.message };
     if (!data || data.length === 0) return { ok: false, status: "NO RUNS", lastRunAt: null, ageSec: null };
     const last = data[0];
     if (!last.last_run_at) return { ok: false, status: "PENDING", lastRunAt: null, ageSec: null };
     const ageSec = Math.floor((Date.now() - new Date(last.last_run_at).getTime()) / 1000);
     const anyError = data.some((d) => d.status === "error" || !!d.error_message);
-    const stale = ageSec > 30 * 60; // > 30 min
+    const stale = ageSec > 30 * 60;
     const ok = !anyError && !stale && last.status !== "error";
     let status = "CONNECTED";
     if (anyError) status = "ERROR";
@@ -64,7 +64,7 @@ async function probeSheetSync(): Promise<{ ok: boolean; status: string; lastRunA
     else status = `LAST: ${Math.floor(ageSec / 3600)}h AGO`;
     return { ok, status, lastRunAt: last.last_run_at, ageSec };
   } catch (e) {
-    return { ok: false, status: "OFFLINE", lastRunAt: null, ageSec: null };
+    return { ok: false, status: "OFFLINE", lastRunAt: null, ageSec: null, detail: String(e) };
   }
 }
 
