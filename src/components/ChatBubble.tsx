@@ -1,9 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+const SESSION_ID = "lovable-main-session";
+
+function extractReply(data: any): string {
+  if (!data) return "";
+  if (typeof data === "string") return data;
+  return (
+    data.reply ?? data.response ?? data.message ?? data.output ?? data.content ??
+    data.choices?.[0]?.message?.content ?? JSON.stringify(data)
+  );
+}
 
 const ChatBubble = () => {
   const [open, setOpen] = useState(false);
@@ -26,67 +36,19 @@ const ChatBubble = () => {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
-    let assistantSoFar = "";
-    const allMessages = [...messages, userMsg];
-
     try {
-      const resp = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ messages: allMessages.filter(m => m.role !== "assistant" || allMessages.indexOf(m) > 0).map(m => ({ role: m.role, content: m.content })) }),
+      const { data, error } = await supabase.functions.invoke("agent-proxy", {
+        body: { message: text, session: SESSION_ID, mode: "agent" },
       });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: "Request failed" }));
-        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${err.error || "Something went wrong."}` }]);
-        setLoading(false);
-        return;
-      }
-
-      const reader = resp.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let newlineIdx: number;
-        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, newlineIdx);
-          buffer = buffer.slice(newlineIdx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              assistantSoFar += content;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === "assistant" && prev.length > 1 && last.content === assistantSoFar.slice(0, -content.length)) {
-                  return [...prev.slice(0, -1), { role: "assistant", content: assistantSoFar }];
-                }
-                if (last?.role === "assistant" && prev.length > 1) {
-                  return [...prev.slice(0, -1), { role: "assistant", content: assistantSoFar }];
-                }
-                return [...prev, { role: "assistant", content: assistantSoFar }];
-              });
-            }
-          } catch { /* partial JSON */ }
-        }
-      }
-    } catch (e) {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Connection error. Please try again." }]);
+      if (error) throw error;
+      const reply = extractReply(data) || "(empty response)";
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+    } catch (e: any) {
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${e?.message || "Connection error"}` }]);
     }
     setLoading(false);
   };
+
 
   return (
     <>
