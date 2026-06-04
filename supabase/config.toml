@@ -39,3 +39,8 @@ verify_jwt = false
 [functions.agent-proxy]
 verify_jwt = false
 
+[functions.agent-proxy-replay]
+verify_jwt = false
+
+
+
