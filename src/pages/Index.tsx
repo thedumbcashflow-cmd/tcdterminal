@@ -9,8 +9,21 @@ import { Loader2, TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-
 import { useSolanaStats } from "@/hooks/useSolanaStats";
 import { supabase } from "@/integrations/supabase/client";
 
-interface HealthProbe { ok: boolean; status: string; latencyMs?: number | null; lastRunAt?: string | null; ageSec?: number | null; detail?: string; }
+interface HealthProbe {
+  ok: boolean; status: string; latencyMs?: number | null;
+  lastRunAt?: string | null; ageSec?: number | null; detail?: string;
+  errorMessage?: string | null; lastSuccessAt?: string | null; lastErrorAt?: string | null;
+}
 interface HealthResponse { helius: HealthProbe; sheetSync: HealthProbe; checkedAt: string; }
+
+const fmtRelative = (iso?: string | null): string => {
+  if (!iso) return "never";
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
+};
 
 const fmtUsd = (n: number | null, compact = false): string => {
   if (n == null || isNaN(n)) return "—";
@@ -119,21 +132,33 @@ const Index = () => {
       label: "Solscan API",
       status: stats.error ? "ERROR" : stats.loading ? "POLLING…" : "CONNECTED",
       ok: !stats.error,
+      lastSuccessAt: null as string | null,
+      lastErrorAt: null as string | null,
+      errorMessage: stats.error || null,
     },
     {
       label: "RPC Node",
       status: stats.epochInfo ? "OPERATIONAL" : stats.loading ? "CONNECTING…" : "OFFLINE",
       ok: !!stats.epochInfo,
+      lastSuccessAt: null,
+      lastErrorAt: null,
+      errorMessage: stats.epochInfo ? null : "No epoch info returned",
     },
     {
       label: "Sheet Sync",
       status: healthLoading ? "PROBING…" : (health?.sheetSync?.status ?? "UNKNOWN"),
       ok: !!health?.sheetSync?.ok,
+      lastSuccessAt: health?.sheetSync?.lastSuccessAt ?? null,
+      lastErrorAt: health?.sheetSync?.lastErrorAt ?? null,
+      errorMessage: health?.sheetSync?.errorMessage ?? null,
     },
     {
       label: "Helius API",
       status: healthLoading ? "PROBING…" : (health?.helius?.status ?? "UNKNOWN"),
       ok: !!health?.helius?.ok,
+      lastSuccessAt: health?.helius?.lastSuccessAt ?? null,
+      lastErrorAt: health?.helius?.lastErrorAt ?? null,
+      errorMessage: health?.helius?.errorMessage ?? null,
     },
   ];
 
@@ -262,15 +287,33 @@ const Index = () => {
 
               <TerminalCard title="System Status">
                 <div className="space-y-2">
-                  {sysStatus.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{s.label}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`h-1.5 w-1.5 rounded-full ${s.ok ? "bg-terminal-green" : "bg-terminal-red"}`} />
-                        <span className="font-data text-[10px] text-muted-foreground">{s.status}</span>
+                  {sysStatus.map((s, i) => {
+                    const tooltip = [
+                      s.lastSuccessAt ? `Last OK: ${fmtRelative(s.lastSuccessAt)}` : null,
+                      s.lastErrorAt ? `Last error: ${fmtRelative(s.lastErrorAt)}` : null,
+                      s.errorMessage ? `Reason: ${s.errorMessage}` : null,
+                    ].filter(Boolean).join("\n");
+                    return (
+                      <div key={i} className="flex flex-col gap-0.5 text-xs" title={tooltip || undefined}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">{s.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 rounded-full ${s.ok ? "bg-terminal-green" : "bg-terminal-red"}`} />
+                            <span className="font-data text-[10px] text-muted-foreground">{s.status}</span>
+                          </div>
+                        </div>
+                        {(s.lastSuccessAt || s.errorMessage) && (
+                          <div className="font-data text-[9px] text-muted-foreground/70 leading-tight">
+                            {s.lastSuccessAt && <span>ok {fmtRelative(s.lastSuccessAt)}</span>}
+                            {s.lastSuccessAt && s.errorMessage && <span> · </span>}
+                            {s.errorMessage && !s.ok && (
+                              <span className="text-terminal-red/80">{s.errorMessage.slice(0, 48)}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </TerminalCard>
             </div>

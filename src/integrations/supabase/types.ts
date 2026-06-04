@@ -179,6 +179,45 @@ export type Database = {
         }
         Relationships: []
       }
+      proxy_request_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          latency_ms: number | null
+          path: string
+          payload: Json | null
+          req_id: string
+          status: number | null
+          upstream_snippet: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          path: string
+          payload?: Json | null
+          req_id: string
+          status?: number | null
+          upstream_snippet?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          path?: string
+          payload?: Json | null
+          req_id?: string
+          status?: number | null
+          upstream_snippet?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           created_at: string
@@ -294,6 +333,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      purge_old_proxy_logs: { Args: never; Returns: undefined }
       search_admin_audit_log: {
         Args: {
           p_action?: string
