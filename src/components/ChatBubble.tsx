@@ -6,6 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 type Msg = { role: "user" | "assistant"; content: string; kind?: "text" | "auth" | "error" };
 
 const SESSION_ID = "lovable-main-session";
+const MAX_RECONNECTS = 2;
+const RECONNECT_BACKOFF_MS = [800, 2000]; // first retry fast, second slower
+const CLIENT_TIMEOUT_MS = 120_000;
 
 function extractDelta(obj: any): string {
   if (!obj) return "";
@@ -32,11 +35,20 @@ const ChatBubble = () => {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const ctrlRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Cancel any in-flight stream on unmount or when chat is closed
+  useEffect(() => {
+    return () => { ctrlRef.current?.abort("unmount"); };
+  }, []);
+  useEffect(() => {
+    if (!open) ctrlRef.current?.abort("closed");
+  }, [open]);
 
   const appendAssistant = (content: string, kind: Msg["kind"] = "text") =>
     setMessages((prev) => [...prev, { role: "assistant", content, kind }]);
@@ -50,15 +62,13 @@ const ChatBubble = () => {
       return [...prev.slice(0, -1), { ...last, content }];
     });
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setLoading(true);
-
+  // One streaming attempt; returns { ok, partial, reason, reqId } so caller can decide on reconnect
+  async function streamOnce(text: string, resumeFrom: string): Promise<{
+    ok: boolean; partial: string; reason?: "drop" | "timeout" | "auth" | "rate" | "server" | "abort"; reqId?: string;
+  }> {
     const ctrl = new AbortController();
-    const timeoutId = setTimeout(() => ctrl.abort(), 60_000);
+    ctrlRef.current = ctrl;
+    const timeoutId = setTimeout(() => ctrl.abort("timeout"), CLIENT_TIMEOUT_MS);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -74,10 +84,14 @@ const ChatBubble = () => {
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${bearer}`,
         },
-        body: JSON.stringify({ message: text, session: SESSION_ID, mode: "agent", stream: true }),
+        body: JSON.stringify({
+          message: text, session: SESSION_ID, mode: "agent", stream: true,
+          // hint to upstream that we already have N chars — agent may ignore but we send it
+          ...(resumeFrom ? { resumeFromChars: resumeFrom.length } : {}),
+        }),
       });
 
-      const reqId = resp.headers.get("x-request-id") || "—";
+      const reqId = resp.headers.get("x-request-id") || undefined;
 
       if (resp.status === 401) {
         const reason = resp.headers.get("x-auth-reason") || "missing";
@@ -87,68 +101,134 @@ const ChatBubble = () => {
           invalid: "Invalid credentials. Please sign in again.",
         };
         appendAssistant(messagesByReason[reason] || "Authentication required.", "auth");
-        return;
+        return { ok: false, partial: "", reason: "auth", reqId };
       }
-      if (resp.status === 429) { appendAssistant("Rate limit reached. Please wait a moment and try again.", "error"); return; }
-      if (resp.status === 504) { appendAssistant("Agent timed out. The backend took too long to respond.", "error"); return; }
+      if (resp.status === 429) {
+        const retry = resp.headers.get("Retry-After") || "a moment";
+        appendAssistant(`Rate limit reached. Try again in ${retry}s.`, "error");
+        return { ok: false, partial: "", reason: "rate", reqId };
+      }
       if (!resp.ok) {
-        const raw = await resp.text();
+        const raw = await resp.text().catch(() => "");
         let detail = raw.slice(0, 240);
-        try { detail = JSON.parse(raw).error || detail; } catch { /* keep raw */ }
-        appendAssistant(`Agent error (${resp.status}): ${detail}  [req ${reqId}]`, "error");
-        return;
+        try { detail = JSON.parse(raw).error || detail; } catch { /* keep */ }
+        if (resp.status === 504) detail = detail || "Agent timed out.";
+        return { ok: false, partial: resumeFrom, reason: "server", reqId };
       }
 
       const ct = resp.headers.get("content-type") || "";
-      // --- SSE stream path ---
+
+      // --- SSE stream ---
       if (ct.includes("text/event-stream") && resp.body) {
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let assistantSoFar = "";
-        // seed placeholder bubble for incremental updates
-        setMessages((prev) => [...prev, { role: "assistant", content: "", kind: "text" }]);
+        let assistantSoFar = resumeFrom;
+        // ensure bubble exists; if resuming, last bubble is already in place
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.kind === "text") return prev;
+          return [...prev, { role: "assistant", content: assistantSoFar, kind: "text" }];
+        });
+        if (resumeFrom) updateLastAssistant(assistantSoFar);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let idx: number;
-          while ((idx = buffer.indexOf("\n")) !== -1) {
-            let line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1);
-            if (line.endsWith("\r")) line = line.slice(0, -1);
-            if (!line.startsWith("data:")) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === "[DONE]") continue;
-            let chunk = "";
-            try { chunk = extractDelta(JSON.parse(payload)); }
-            catch { chunk = payload; }
-            if (chunk) {
-              assistantSoFar += chunk;
-              updateLastAssistant(assistantSoFar);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx: number;
+            while ((idx = buffer.indexOf("\n")) !== -1) {
+              let line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1);
+              if (line.endsWith("\r")) line = line.slice(0, -1);
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              let chunk = "";
+              try { chunk = extractDelta(JSON.parse(payload)); }
+              catch { chunk = payload; }
+              if (chunk) {
+                assistantSoFar += chunk;
+                updateLastAssistant(assistantSoFar);
+              }
             }
           }
+        } catch (err: any) {
+          // Reader broke mid-stream: surface as drop so caller can attempt reconnect
+          if (ctrl.signal.aborted) {
+            return { ok: false, partial: assistantSoFar, reason: ctrl.signal.reason === "timeout" ? "timeout" : "abort", reqId };
+          }
+          return { ok: false, partial: assistantSoFar, reason: "drop", reqId };
         }
-        if (!assistantSoFar) updateLastAssistant("(empty response)");
-        return;
+        return { ok: true, partial: assistantSoFar, reqId };
       }
 
-      // --- Buffered JSON path ---
+      // --- Buffered JSON ---
       const raw = await resp.text();
       let parsed: any = null;
       try { parsed = JSON.parse(raw); } catch {
-        appendAssistant(`Malformed response from agent. [req ${reqId}]`, "error");
-        return;
+        appendAssistant(`Malformed response from agent. [req ${reqId || "—"}]`, "error");
+        return { ok: false, partial: "", reason: "server", reqId };
       }
-      appendAssistant(finalReply(parsed) || "(empty response)");
+      const reply = finalReply(parsed) || "(empty response)";
+      updateLastAssistant(reply);
+      return { ok: true, partial: reply, reqId };
     } catch (e: any) {
-      const msg = e?.name === "AbortError" ? "Request timed out after 60s." : (e?.message || "Connection error");
-      appendAssistant(`Error: ${msg}`, "error");
+      const aborted = ctrl.signal.aborted;
+      const isTimeout = aborted && ctrl.signal.reason === "timeout";
+      if (aborted && !isTimeout) return { ok: false, partial: resumeFrom, reason: "abort" };
+      return { ok: false, partial: resumeFrom, reason: isTimeout ? "timeout" : "drop" };
     } finally {
       clearTimeout(timeoutId);
-      setLoading(false);
+      if (ctrlRef.current === ctrl) ctrlRef.current = null;
     }
+  }
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setLoading(true);
+
+    let partial = "";
+    let lastReason: string | undefined;
+    let lastReqId: string | undefined;
+
+    for (let attempt = 0; attempt <= MAX_RECONNECTS; attempt++) {
+      // Seed a placeholder bubble before the first attempt only
+      if (attempt === 0) {
+        setMessages((prev) => [...prev, { role: "assistant", content: "", kind: "text" }]);
+      }
+      const result = await streamOnce(text, partial);
+      partial = result.partial;
+      lastReason = result.reason;
+      lastReqId = result.reqId;
+
+      if (result.ok) break;
+      // Don't retry on terminal reasons
+      if (result.reason === "auth" || result.reason === "rate" || result.reason === "abort") break;
+
+      if (attempt < MAX_RECONNECTS) {
+        const wait = RECONNECT_BACKOFF_MS[attempt] ?? 2000;
+        updateLastAssistant(partial + `\n\n[connection lost — reconnecting in ${wait / 1000}s…]`);
+        await new Promise((r) => setTimeout(r, wait));
+        // strip the reconnect marker before next attempt
+        updateLastAssistant(partial);
+      } else {
+        const tail = lastReason === "timeout" ? "timed out" : "connection dropped";
+        const suffix = partial
+          ? `\n\n[stream ${tail} after partial response — req ${lastReqId || "—"}]`
+          : `Stream ${tail}. Please retry. [req ${lastReqId || "—"}]`;
+        if (partial) updateLastAssistant(partial + suffix);
+        else appendAssistant(suffix, "error");
+      }
+    }
+
+    setLoading(false);
   };
+
+  const stop = () => { ctrlRef.current?.abort("user-stop"); };
 
   return (
     <>
@@ -165,6 +245,14 @@ const ChatBubble = () => {
           <div className="border-b border-border px-3 py-2 flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-terminal-green" />
             <span className="text-xs font-bold uppercase tracking-wider text-foreground">TCD Terminal AI</span>
+            {loading && (
+              <button
+                onClick={stop}
+                className="ml-auto border border-border px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-muted-foreground hover:bg-secondary"
+              >
+                Stop
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-auto p-3 space-y-3">
@@ -174,7 +262,7 @@ const ChatBubble = () => {
               return (
                 <div
                   key={i}
-                  className={`text-xs leading-relaxed ${
+                  className={`text-xs leading-relaxed whitespace-pre-wrap ${
                     m.role === "user"
                       ? "text-primary ml-6"
                       : isAuth
