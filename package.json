@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:security": "vitest run src/test/*.security.test.ts",
+    "test:security:json": "vitest run src/test/*.security.test.ts --reporter=json --outputFile=.ci/rls.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -7,12 +7,12 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   audit:
-    name: Dependency & RLS Audit
+    name: Dependency, RLS & Smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,16 +24,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run npm audit (high severity blocker)
+      # ---------- 1. npm audit ----------
+      - name: npm audit (block on high)
         id: audit
         run: |
           set +e
           bun pm audit --audit-level=high > audit.txt 2>&1
           echo "exit_code=$?" >> $GITHUB_OUTPUT
+          HIGH=$(grep -Eoc 'high|critical' audit.txt || echo 0)
+          echo "high_count=$HIGH" >> $GITHUB_OUTPUT
           cat audit.txt
         continue-on-error: true
 
-      - name: Run RLS security tests
+      # ---------- 2. RLS tests with JSON reporter ----------
+      - name: RLS verification tests
         id: rls
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -43,38 +47,102 @@ jobs:
           ADMIN_USER_ID: ${{ secrets.ADMIN_USER_ID }}
         run: |
           set +e
-          bunx vitest run src/test/*.security.test.ts > rls.txt 2>&1
+          mkdir -p .ci
+          bunx vitest run "src/test/*.security.test.ts" --reporter=json --outputFile=.ci/rls.json | tee rls.txt
           echo "exit_code=$?" >> $GITHUB_OUTPUT
-          cat rls.txt
         continue-on-error: true
 
-      - name: Post PR comment with results
+      - name: Build RLS summary table
+        if: always()
+        run: node scripts/security/parse-rls-results.mjs .ci/rls.json .ci
+
+      # ---------- 3. APILayer smoke ----------
+      - name: APILayer smoke test
+        id: apilayer
+        env:
+          APILAYER_KEY: ${{ secrets.APILAYER_KEY }}
+        run: |
+          set +e
+          node scripts/security/apilayer-smoke.mjs > apilayer.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          cat apilayer.txt
+        continue-on-error: true
+
+      # ---------- 4. Append scan-history.json (main branch only) ----------
+      - name: Append trend history
+        if: github.ref == 'refs/heads/main' && always()
+        run: |
+          node scripts/security/append-scan-history.mjs \
+            --high "${{ steps.audit.outputs.high_count }}" \
+            --medium 0 --low 0 \
+            --commit "${{ github.sha }}" \
+            --status "${{ steps.audit.outputs.exit_code == '0' && steps.rls.outputs.exit_code == '0' && 'pass' || 'fail' }}"
+
+      - name: Commit updated scan-history.json
+        if: github.ref == 'refs/heads/main' && always()
+        run: |
+          if git diff --quiet docs/security/scan-history.json; then
+            echo "No history change."
+          else
+            git config user.name "security-bot"
+            git config user.email "security-bot@users.noreply.github.com"
+            git add docs/security/scan-history.json
+            git commit -m "chore(security): append scan run [skip ci]"
+            git push
+          fi
+
+      # ---------- 5. Upload artifacts ----------
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-${{ github.run_id }}
+          path: |
+            audit.txt
+            rls.txt
+            apilayer.txt
+            .ci/rls.json
+            .ci/rls-summary.md
+            .ci/rls-summary.json
+          retention-days: 30
+
+      # ---------- 6. PR comment ----------
+      - name: Post PR comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const audit = fs.existsSync('audit.txt') ? fs.readFileSync('audit.txt', 'utf8') : 'audit not run';
-            const rls = fs.existsSync('rls.txt') ? fs.readFileSync('rls.txt', 'utf8') : 'rls tests not run';
+            const read = (p) => fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '_not produced_';
+            const audit = read('audit.txt');
+            const rlsSummary = read('.ci/rls-summary.md');
+            const apilayer = read('apilayer.txt');
             const auditCode = '${{ steps.audit.outputs.exit_code }}';
             const rlsCode = '${{ steps.rls.outputs.exit_code }}';
+            const apiCode = '${{ steps.apilayer.outputs.exit_code }}';
+            const ok = (c) => c === '0' ? '✅ pass' : '❌ fail';
             const body = [
               '## 🔐 Security Scan Results',
               '',
-              `**Dependency audit:** ${auditCode === '0' ? '✅ pass' : '❌ high-severity findings'}`,
-              `**RLS tests:** ${rlsCode === '0' ? '✅ pass' : '❌ failures'}`,
+              `| Check | Result |`,
+              `|---|---|`,
+              `| Dependency audit (high+) | ${ok(auditCode)} |`,
+              `| RLS verification | ${ok(rlsCode)} |`,
+              `| APILayer smoke | ${ok(apiCode)} |`,
               '',
-              '<details><summary>npm audit output</summary>',
+              rlsSummary,
+              '',
+              '<details><summary>npm audit</summary>',
               '',
               '```',
-              audit.slice(0, 60000),
+              audit.slice(0, 50000),
               '```',
               '</details>',
               '',
-              '<details><summary>RLS test output</summary>',
+              '<details><summary>APILayer smoke output</summary>',
               '',
               '```',
-              rls.slice(0, 60000),
+              apilayer.slice(0, 5000),
               '```',
               '</details>',
             ].join('\n');
@@ -85,8 +153,23 @@ jobs:
               body,
             });
 
-      - name: Fail build on high-severity findings
-        if: steps.audit.outputs.exit_code != '0' || steps.rls.outputs.exit_code != '0'
+      # ---------- 7. Escalate on new high-severity ----------
+      - name: Escalate to Slack/Discord
+        if: failure() || steps.audit.outputs.exit_code != '0'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HIGH_COUNT: ${{ steps.audit.outputs.high_count }}
+          NEW_HIGH_COUNT: ${{ steps.audit.outputs.high_count }}
+        run: node scripts/security/notify-webhooks.mjs
+
+      # ---------- 8. Block merge on failure ----------
+      - name: Fail build on any high-severity issue
+        if: steps.audit.outputs.exit_code != '0' || steps.rls.outputs.exit_code != '0' || steps.apilayer.outputs.exit_code != '0'
         run: |
           echo "::error::Security scan failed. See PR comment for details."
           exit 1

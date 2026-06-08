@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import TerminalCard from "@/components/TerminalCard";
 import { format } from "date-fns";
-import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock, FlaskConical, ScrollText } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, Plus, Shield, ArrowLeft, Users, AlertTriangle, Activity, MessageSquare, Lock, FlaskConical, ScrollText, ShieldAlert } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import TierPreview from "@/components/admin/TierPreview";
 import AuditLog from "@/components/admin/AuditLog";
+import SecurityTrend from "@/components/admin/SecurityTrend";
 
 type MarketIntel = Tables<"market_intel">;
 
@@ -26,7 +27,7 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit" | "security">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
   const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
@@ -260,7 +261,7 @@ const Admin = () => {
             "roles",
             "requests",
             "monitoring",
-            ...(role === "admin" ? (["audit", "tier-preview"] as const) : []),
+            ...(role === "admin" ? (["audit", "tier-preview", "security"] as const) : []),
           ] as const
         ).map((tab) => (
           <button
@@ -276,6 +277,7 @@ const Admin = () => {
             {tab === "monitoring" && "Monitoring"}
             {tab === "audit" && (<><ScrollText className="h-3 w-3" /> Audit Log</>)}
             {tab === "tier-preview" && (<><FlaskConical className="h-3 w-3" /> Tier Preview</>)}
+            {tab === "security" && (<><ShieldAlert className="h-3 w-3" /> Security Trend</>)}
           </button>
         ))}
       </div>
@@ -642,6 +644,11 @@ const Admin = () => {
         {/* TIER PREVIEW TAB — admin only (extra defense-in-depth check) */}
         {activeTab === "tier-preview" && role === "admin" && (
           <TierPreview />
+        )}
+
+        {/* SECURITY TREND TAB — admin only */}
+        {activeTab === "security" && role === "admin" && (
+          <SecurityTrend />
         )}
       </div>
     </div>
