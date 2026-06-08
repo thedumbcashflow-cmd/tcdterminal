@@ -1,0 +1,35 @@
+# GitLab CI mirror of .github/workflows/security-scan.yml.
+# Blocks merges when high-severity dependency findings or RLS test failures are detected.
+stages:
+  - security
+
+security_scan:
+  stage: security
+  image: oven/bun:1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    SUPABASE_URL: $SUPABASE_URL
+    SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
+    ADMIN_JWT: $ADMIN_JWT
+    USER_JWT: $USER_JWT
+    ADMIN_USER_ID: $ADMIN_USER_ID
+  script:
+    - bun install --frozen-lockfile
+    - set +e
+    - bun pm audit --audit-level=high | tee audit.txt
+    - AUDIT_EXIT=$?
+    - bunx vitest run src/test/*.security.test.ts | tee rls.txt
+    - RLS_EXIT=$?
+    - |
+      if [ "$AUDIT_EXIT" != "0" ] || [ "$RLS_EXIT" != "0" ]; then
+        echo "Security scan failed. audit=$AUDIT_EXIT rls=$RLS_EXIT"
+        exit 1
+      fi
+  artifacts:
+    when: always
+    paths:
+      - audit.txt
+      - rls.txt
+    expire_in: 7 days
