@@ -1,5 +1,7 @@
 # GitLab CI mirror of .github/workflows/security-scan.yml.
-# Blocks merges when high-severity dependency findings or RLS test failures are detected.
+# Blocks merges on high-severity dependency findings or RLS test failures,
+# uploads results as job artifacts, posts a summary as an MR note, and
+# escalates to Slack/Discord webhooks (whichever secrets are configured).
 stages:
   - security
 
@@ -10,21 +12,44 @@ security_scan:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   variables:
-    SUPABASE_URL: $SUPABASE_URL
-    SUPABASE_ANON_KEY: $SUPABASE_ANON_KEY
-    ADMIN_JWT: $ADMIN_JWT
-    USER_JWT: $USER_JWT
-    ADMIN_USER_ID: $ADMIN_USER_ID
+    GIT_DEPTH: "20"
   script:
+    - apt-get update && apt-get install -y --no-install-recommends curl jq nodejs
     - bun install --frozen-lockfile
     - set +e
+    - mkdir -p .ci
     - bun pm audit --audit-level=high | tee audit.txt
     - AUDIT_EXIT=$?
-    - bunx vitest run src/test/*.security.test.ts | tee rls.txt
+    - bunx vitest run "src/test/*.security.test.ts" --reporter=json --outputFile=.ci/rls.json | tee rls.txt
     - RLS_EXIT=$?
+    - node scripts/security/parse-rls-results.mjs .ci/rls.json .ci || true
+    - APILAYER_KEY="$APILAYER_KEY" node scripts/security/apilayer-smoke.mjs | tee apilayer.txt
+    - API_EXIT=$?
     - |
-      if [ "$AUDIT_EXIT" != "0" ] || [ "$RLS_EXIT" != "0" ]; then
-        echo "Security scan failed. audit=$AUDIT_EXIT rls=$RLS_EXIT"
+      HIGH_COUNT=$(grep -Ec 'high|critical' audit.txt || echo 0)
+      if [ "$AUDIT_EXIT" != "0" ]; then
+        SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL" DISCORD_WEBHOOK_URL="$DISCORD_WEBHOOK_URL" \
+        REPO="$CI_PROJECT_PATH" PR="$CI_MERGE_REQUEST_IID" COMMIT="$CI_COMMIT_SHA" \
+        RUN_URL="$CI_PIPELINE_URL" HIGH_COUNT="$HIGH_COUNT" NEW_HIGH_COUNT="$HIGH_COUNT" \
+        node scripts/security/notify-webhooks.mjs || true
+      fi
+    - |
+      if [ -n "$CI_MERGE_REQUEST_IID" ] && [ -n "$GITLAB_API_TOKEN" ]; then
+        SUMMARY=$(cat .ci/rls-summary.md 2>/dev/null || echo "_no summary_")
+        BODY=$(printf '## 🔐 Security Scan\n| Check | Result |\n|---|---|\n| audit | %s |\n| rls | %s |\n| apilayer | %s |\n\n%s' \
+          "$([ "$AUDIT_EXIT" = 0 ] && echo ✅ || echo ❌)" \
+          "$([ "$RLS_EXIT" = 0 ] && echo ✅ || echo ❌)" \
+          "$([ "$API_EXIT" = 0 ] && echo ✅ || echo ❌)" \
+          "$SUMMARY")
+        curl -sS -X POST \
+          -H "PRIVATE-TOKEN: $GITLAB_API_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data "$(jq -nc --arg b "$BODY" '{body:$b}')" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/merge_requests/$CI_MERGE_REQUEST_IID/notes" || true
+      fi
+    - |
+      if [ "$AUDIT_EXIT" != "0" ] || [ "$RLS_EXIT" != "0" ] || [ "$API_EXIT" != "0" ]; then
+        echo "Security scan failed. audit=$AUDIT_EXIT rls=$RLS_EXIT apilayer=$API_EXIT"
         exit 1
       fi
   artifacts:
@@ -32,4 +57,8 @@ security_scan:
     paths:
       - audit.txt
       - rls.txt
-    expire_in: 7 days
+      - apilayer.txt
+      - .ci/rls.json
+      - .ci/rls-summary.md
+      - .ci/rls-summary.json
+    expire_in: 30 days
