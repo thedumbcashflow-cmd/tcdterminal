@@ -10,8 +10,8 @@ const VALID_PLANS = ["pro", "whale"];
 const VALID_PERIODS: BillingPeriod[] = ["monthly", "quarterly", "yearly"];
 
 const PRICING: Record<string, Record<BillingPeriod, number>> = {
-  pro: { monthly: 199, quarterly: 549, yearly: 1999 },
-  whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
+  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
 };
 
 const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE" };
