@@ -10,6 +10,17 @@
         "medium": 0,
         "low": 0
       }
+    },
+    {
+      "ts": "2026-06-09T10:19:49.236Z",
+      "commit": "9892190ee434",
+      "pr": null,
+      "status": "fail",
+      "severity": {
+        "high": 0,
+        "medium": 0,
+        "low": 0
+      }
     }
   ]
 }
