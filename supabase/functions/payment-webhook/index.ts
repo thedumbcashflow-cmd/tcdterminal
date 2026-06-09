@@ -158,6 +158,14 @@ serve(async (req) => {
         });
       }
 
+      // Defense-in-depth: caller must match the user_id embedded in the PayPal order.
+      if (userId !== callerId) {
+        console.error(`payment-webhook caller mismatch: caller=${callerId} order user_id=${userId}`);
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
       if (!PRICING[plan] || !PRICING[plan][period]) {
         return new Response(JSON.stringify({ error: "Invalid plan or period in custom_id" }), {
           status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
