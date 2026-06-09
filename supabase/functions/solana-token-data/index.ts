@@ -54,8 +54,25 @@ const cache = new Map<string, { at: number; body: unknown }>();
 const TTL_MS = 60_000;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  corsHeaders = cors.headers;
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (!cors.allowed) return json(403, { error: "Forbidden" });
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+
+  // Require authenticated user — prevents anonymous Helius credit drain.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return json(401, { error: "Unauthorized" });
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) return json(401, { error: "Unauthorized" });
 
   let body: { address?: string };
   try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON" }); }
