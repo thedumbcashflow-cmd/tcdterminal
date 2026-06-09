@@ -44,8 +44,8 @@ const PERIOD_MONTHS: Record<string, number> = {
 };
 
 const PRICING: Record<string, Record<string, number>> = {
-  pro: { monthly: 199, quarterly: 549, yearly: 1999 },
-  whale: { monthly: 799, quarterly: 2199, yearly: 7999 },
+  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
 };
 
 serve(async (req) => {
