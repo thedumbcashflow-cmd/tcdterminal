@@ -218,6 +218,51 @@ export type Database = {
         }
         Relationships: []
       }
+      sovereign_applications: {
+        Row: {
+          applicant_name: string
+          aum_bracket: string
+          contact_email: string
+          created_at: string
+          fund_name: string
+          id: string
+          message: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          applicant_name: string
+          aum_bracket: string
+          contact_email: string
+          created_at?: string
+          fund_name: string
+          id?: string
+          message?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          applicant_name?: string
+          aum_bracket?: string
+          contact_email?: string
+          created_at?: string
+          fund_name?: string
+          id?: string
+          message?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           created_at: string
