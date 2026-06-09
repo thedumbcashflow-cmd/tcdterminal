@@ -67,6 +67,27 @@ serve(async (req) => {
   }
 
   try {
+    // Require authenticated caller — binds capture to the signed-in user,
+    // preventing replay of completed PayPal order_ids by third parties.
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+    }
+    const sbUser = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: userData, error: userErr } = await sbUser.auth.getUser();
+    if (userErr || !userData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+    }
+    const callerId = userData.user.id;
+
     const body = await req.json();
     const event = body.event;
 
@@ -134,6 +155,14 @@ serve(async (req) => {
       if (!userId || !plan) {
         return new Response(JSON.stringify({ error: "Missing user_id or plan in custom_id" }), {
           status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
+      // Defense-in-depth: caller must match the user_id embedded in the PayPal order.
+      if (userId !== callerId) {
+        console.error(`payment-webhook caller mismatch: caller=${callerId} order user_id=${userId}`);
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
       }
 

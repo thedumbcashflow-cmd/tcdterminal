@@ -1,11 +1,30 @@
 // Solana token enrichment: mint authorities, top holders, recent transactions.
 // Uses Helius RPC (server-side) so we bypass the browser 403 on public mainnet-beta
 // and avoid leaking the Helius key client-side.
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "https://19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Vary": "Origin",
 };
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCors, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCors, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCors, allowed: false };
+}
+let corsHeaders: Record<string, string> = baseCors;
 
 const HELIUS_KEY = Deno.env.get("HELIUS_API_KEY") || "";
 const RPC_URL = HELIUS_KEY
@@ -35,8 +54,25 @@ const cache = new Map<string, { at: number; body: unknown }>();
 const TTL_MS = 60_000;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  corsHeaders = cors.headers;
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (!cors.allowed) return json(403, { error: "Forbidden" });
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
+
+  // Require authenticated user — prevents anonymous Helius credit drain.
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return json(401, { error: "Unauthorized" });
+  const sb = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) return json(401, { error: "Unauthorized" });
 
   let body: { address?: string };
   try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON" }); }

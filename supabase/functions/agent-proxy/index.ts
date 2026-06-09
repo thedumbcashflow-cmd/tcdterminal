@@ -7,16 +7,35 @@
 // - Persists sanitized request metadata to proxy_request_log for admin replay
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const ALLOWED_ORIGINS = [
+  "https://tcdterminal.lovable.app",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovable.app",
+  "https://19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
+  "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+const baseCorsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Expose-Headers": "x-request-id, x-auth-reason, x-rl-remaining",
+  "Vary": "Origin",
 };
+function corsFor(req: Request) {
+  const origin = req.headers.get("Origin");
+  if (!origin) return { headers: baseCorsHeaders, allowed: true };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return { headers: { ...baseCorsHeaders, "Access-Control-Allow-Origin": origin }, allowed: true };
+  }
+  return { headers: baseCorsHeaders, allowed: false };
+}
+// Track corsHeaders per-request; default is restrictive (no origin set).
+let corsHeaders: Record<string, string> = baseCorsHeaders;
 
 const BASE = (Deno.env.get("AGENT_BACKEND_URL") || "").replace(/\/+$/, "");
 const TUNNEL_PW = Deno.env.get("AGENT_TUNNEL_PASSWORD") || "";
-const REQUIRE_AUTH = (Deno.env.get("AGENT_REQUIRE_AUTH") || "0") === "1";
+// SECURITY: auth is required by default; opt-out only via explicit env flag.
+const REQUIRE_AUTH = (Deno.env.get("AGENT_REQUIRE_AUTH") || "1") !== "0";
 const TIMEOUT_MS = Number(Deno.env.get("AGENT_TIMEOUT_MS") || 60_000);
 const RATE_LIMIT = Number(Deno.env.get("AGENT_RATE_LIMIT") || 20);
 const RATE_WINDOW_S = Math.ceil(Number(Deno.env.get("AGENT_RATE_WINDOW_MS") || 60_000) / 1000);
@@ -134,7 +153,13 @@ async function logRequest(row: {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  corsHeaders = cors.headers;
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
   if (req.method !== "POST") return jsonRes(405, { error: "Method not allowed" });
   if (!BASE) return jsonRes(500, { error: "AGENT_BACKEND_URL not set" });
 
