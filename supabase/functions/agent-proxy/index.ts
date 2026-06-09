@@ -153,7 +153,13 @@ async function logRequest(row: {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const cors = corsFor(req);
+  corsHeaders = cors.headers;
+  if (req.method === "OPTIONS") {
+    if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    return new Response(null, { headers: corsHeaders });
+  }
+  if (!cors.allowed) return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
   if (req.method !== "POST") return jsonRes(405, { error: "Method not allowed" });
   if (!BASE) return jsonRes(500, { error: "AGENT_BACKEND_URL not set" });
 
