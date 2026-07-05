@@ -98,10 +98,8 @@ const Index = () => {
       if (!error && data) {
         const h = data as HealthResponse;
         setHealth(h);
-        // Sheet Sync is stale/erroring and there's no cron → fire a one-shot sync.
-        if (!syncTriggered && !h.sheetSync?.ok) {
+        if (maybeHealSheetSync(h, (n) => supabase.functions.invoke(n).catch(() => {}), syncTriggered)) {
           syncTriggered = true;
-          supabase.functions.invoke("sync-market-data").catch(() => {});
         }
       }
       setHealthLoading(false);
