@@ -119,6 +119,12 @@ export function useTokenCatalyst(address: string) {
         tierLocked: false,
       });
       setHolders({ data: c.holders, loading: false, error: null, tierLocked: false });
+      setHoldersDiag({
+        source: c.holdersSource || (c.holders?.length ? "largestAccounts" : "none"),
+        heliusEnabled: !!c.heliusEnabled,
+        largestError: c.errors?.largest ?? null,
+        supplyAvailable: c.mint?.supply != null,
+      });
       setTransfers({
         data: c.transfers,
         loading: false,
@@ -135,6 +141,7 @@ export function useTokenCatalyst(address: string) {
       const msg = (chainRes.reason as Error)?.message || "On-chain fetch failed";
       setMeta({ data: dexMeta && primary ? { address, ...dexMeta, decimals: 0 } : null, loading: false, error: primary ? null : msg, tierLocked: false });
       setHolders({ data: [], loading: false, error: msg, tierLocked: false });
+      setHoldersDiag({ source: "none", heliusEnabled: false, largestError: msg, supplyAvailable: false });
       setTransfers({ data: [], loading: false, error: msg, tierLocked: false });
       setDefi({ data: [], loading: false, error: msg, tierLocked: false });
     }
