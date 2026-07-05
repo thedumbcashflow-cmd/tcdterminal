@@ -36,10 +36,18 @@ async function fetchOnChain(address: string) {
   };
 }
 
+export interface HoldersDiagnostics {
+  source: "largestAccounts" | "helius-das" | "none" | string;
+  heliusEnabled: boolean;
+  largestError: string | null;
+  supplyAvailable: boolean;
+}
+
 export function useTokenCatalyst(address: string) {
   const [meta, setMeta] = useState<State<any>>(empty());
   const [markets, setMarkets] = useState<State<any>>(empty());
   const [holders, setHolders] = useState<State<any>>(empty());
+  const [holdersDiag, setHoldersDiag] = useState<HoldersDiagnostics | null>(null);
   const [transfers, setTransfers] = useState<State<any>>(empty());
   const [defi, setDefi] = useState<State<any>>(empty());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
