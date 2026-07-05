@@ -154,7 +154,7 @@ export function useTokenCatalyst(address: string) {
   const fetchWalletPnl = useCallback(async (_w: string) => Promise.resolve(), []);
 
   return {
-    meta, markets, holders, transfers, defi,
+    meta, markets, holders, holdersDiag, transfers, defi,
     holdersChange: unavail(), topHolders: unavail(), dexTrades: unavail(), walletPnl: unavail(),
     fetchWalletPnl, lastUpdated, refresh,
   };
