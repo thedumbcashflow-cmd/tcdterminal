@@ -164,7 +164,4 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-// Register only when running as an edge function (not during Deno.test import).
-if (import.meta.main) {
-  Deno.serve(handleRequest);
-}
+// Serve is registered by index.ts to keep this module import-safe for tests.
