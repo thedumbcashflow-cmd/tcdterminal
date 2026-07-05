@@ -81,7 +81,7 @@ const TokenCatalyst = () => {
   const [transferLimit, setTransferLimit] = useState(PAGE_STEP);
   const address = selected.address;
 
-  const { meta, markets, holders, transfers, defi, lastUpdated, refresh } = useTokenCatalyst(address);
+  const { meta, markets, holders, holdersDiag, transfers, defi, lastUpdated, refresh } = useTokenCatalyst(address);
 
   const m = meta.data || {};
   const metaCore = m.data || m;
