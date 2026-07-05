@@ -32,13 +32,22 @@ async function fetchOnChain(address: string) {
   return data as {
     mint: { supply: number | null; decimals: number | null; mintAuthority: string | null; freezeAuthority: string | null };
     holders: any[]; transfers: any[]; defi: any[]; heliusEnabled: boolean;
+    holdersSource?: string; errors?: { accountInfo: string | null; largest: string | null; txns: string | null };
   };
+}
+
+export interface HoldersDiagnostics {
+  source: "largestAccounts" | "helius-das" | "none" | string;
+  heliusEnabled: boolean;
+  largestError: string | null;
+  supplyAvailable: boolean;
 }
 
 export function useTokenCatalyst(address: string) {
   const [meta, setMeta] = useState<State<any>>(empty());
   const [markets, setMarkets] = useState<State<any>>(empty());
   const [holders, setHolders] = useState<State<any>>(empty());
+  const [holdersDiag, setHoldersDiag] = useState<HoldersDiagnostics | null>(null);
   const [transfers, setTransfers] = useState<State<any>>(empty());
   const [defi, setDefi] = useState<State<any>>(empty());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -110,6 +119,12 @@ export function useTokenCatalyst(address: string) {
         tierLocked: false,
       });
       setHolders({ data: c.holders, loading: false, error: null, tierLocked: false });
+      setHoldersDiag({
+        source: c.holdersSource || (c.holders?.length ? "largestAccounts" : "none"),
+        heliusEnabled: !!c.heliusEnabled,
+        largestError: c.errors?.largest ?? null,
+        supplyAvailable: c.mint?.supply != null,
+      });
       setTransfers({
         data: c.transfers,
         loading: false,
@@ -126,6 +141,7 @@ export function useTokenCatalyst(address: string) {
       const msg = (chainRes.reason as Error)?.message || "On-chain fetch failed";
       setMeta({ data: dexMeta && primary ? { address, ...dexMeta, decimals: 0 } : null, loading: false, error: primary ? null : msg, tierLocked: false });
       setHolders({ data: [], loading: false, error: msg, tierLocked: false });
+      setHoldersDiag({ source: "none", heliusEnabled: false, largestError: msg, supplyAvailable: false });
       setTransfers({ data: [], loading: false, error: msg, tierLocked: false });
       setDefi({ data: [], loading: false, error: msg, tierLocked: false });
     }
@@ -138,7 +154,7 @@ export function useTokenCatalyst(address: string) {
   const fetchWalletPnl = useCallback(async (_w: string) => Promise.resolve(), []);
 
   return {
-    meta, markets, holders, transfers, defi,
+    meta, markets, holders, holdersDiag, transfers, defi,
     holdersChange: unavail(), topHolders: unavail(), dexTrades: unavail(), walletPnl: unavail(),
     fetchWalletPnl, lastUpdated, refresh,
   };

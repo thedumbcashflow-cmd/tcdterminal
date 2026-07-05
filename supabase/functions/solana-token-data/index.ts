@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     const supply = parsed?.supply ? Number(parsed.supply) : null;
     const decimals = parsed?.decimals ?? null;
 
-    const holders = largest.status === "fulfilled"
+    let holders = largest.status === "fulfilled"
       ? ((largest.value as any)?.value || []).map((h: any) => ({
           address: h.address,
           owner: h.address, // largestAccounts returns the token account, not owner; UI accepts either
@@ -110,6 +110,40 @@ Deno.serve(async (req) => {
           decimals: h.decimals,
         }))
       : [];
+    let holdersSource = holders.length ? "largestAccounts" : "none";
+
+    // Fallback: if getTokenLargestAccounts returned no holders (some SPL
+    // programs / brand-new mints don't populate it), try Helius DAS
+    // `getTokenAccounts` which paginates real holders.
+    if (holders.length === 0 && HELIUS_KEY) {
+      try {
+        const r = await fetch(RPC_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0", id: "das", method: "getTokenAccounts",
+            params: { mint: address, limit: 20, options: { showZeroBalance: false } },
+          }),
+        });
+        const j = await r.json();
+        const items = j?.result?.token_accounts ?? [];
+        if (items.length) {
+          const dec = decimals ?? 0;
+          holders = items
+            .map((it: any) => ({
+              address: it.address,
+              owner: it.owner ?? it.address,
+              amount: String(it.amount ?? "0"),
+              ui_amount: Number(it.amount ?? 0) / Math.pow(10, dec),
+              decimals: dec,
+            }))
+            .sort((a: any, b: any) => Number(b.amount) - Number(a.amount));
+          holdersSource = "helius-das";
+        }
+      } catch (e) {
+        console.log("holders DAS fallback failed", String(e));
+      }
+    }
 
     // Helius enriched transactions → split into transfers vs DeFi-like (SWAP, etc.)
     const rawTxs = txns.status === "fulfilled" ? (txns.value as any[]) : [];
@@ -155,6 +189,7 @@ Deno.serve(async (req) => {
         freezeAuthority: parsed?.freezeAuthority ?? null,
       },
       holders,
+      holdersSource,
       transfers: transfers.slice(0, 25),
       defi: defi.slice(0, 25),
       heliusEnabled: !!HELIUS_KEY,

@@ -81,7 +81,7 @@ const TokenCatalyst = () => {
   const [transferLimit, setTransferLimit] = useState(PAGE_STEP);
   const address = selected.address;
 
-  const { meta, markets, holders, transfers, defi, lastUpdated, refresh } = useTokenCatalyst(address);
+  const { meta, markets, holders, holdersDiag, transfers, defi, lastUpdated, refresh } = useTokenCatalyst(address);
 
   const m = meta.data || {};
   const metaCore = m.data || m;
@@ -246,7 +246,20 @@ const TokenCatalyst = () => {
               <TerminalCard title="Top Holders" headerRight={<span className="text-[10px] text-muted-foreground font-data">{Math.min(holderLimit, holderRows.length)}/{holderRows.length}</span>}>
                 {holders.tierLocked ? <Locked label="Top Holders" /> :
                  holders.loading ? <Loading /> : holders.error && holderRows.length === 0 ? <ErrState msg={holders.error} /> : holderRows.length === 0 ? (
-                  <div className="py-6 text-center text-[11px] text-muted-foreground">No holder data.</div>
+                  <div className="py-4 px-3 text-[11px] text-muted-foreground space-y-1.5">
+                    <div className="text-foreground font-data uppercase tracking-wider text-[10px]">No holder data returned</div>
+                    {!holdersDiag?.heliusEnabled && <div>• Helius key not configured — DAS fallback unavailable.</div>}
+                    {holdersDiag?.heliusEnabled && holdersDiag?.source === "none" && (
+                      <div>• Both <code>getTokenLargestAccounts</code> and Helius DAS returned empty. Likely a brand-new mint (indexing delay) or the mint has no distributed supply yet.</div>
+                    )}
+                    {holdersDiag?.largestError && <div>• RPC error: {holdersDiag.largestError}</div>}
+                    {!holdersDiag?.supplyAvailable && <div>• Mint account not found — verify the address is a valid SPL token.</div>}
+                    <div className="pt-1">Try a liquid mint:
+                      {PRESETS.slice(0, 4).map((p) => (
+                        <button key={p.sym} onClick={() => setSelected(p)} className="ml-2 text-primary hover:underline uppercase tracking-wider text-[10px]">{p.sym}</button>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <div className="max-h-64 overflow-auto">
