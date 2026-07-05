@@ -32,6 +32,7 @@ async function fetchOnChain(address: string) {
   return data as {
     mint: { supply: number | null; decimals: number | null; mintAuthority: string | null; freezeAuthority: string | null };
     holders: any[]; transfers: any[]; defi: any[]; heliusEnabled: boolean;
+    holdersSource?: string; errors?: { accountInfo: string | null; largest: string | null; txns: string | null };
   };
 }
 
