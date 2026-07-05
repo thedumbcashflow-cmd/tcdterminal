@@ -41,14 +41,12 @@ const INITIAL: SolanaStats = {
 };
 
 async function rpc(method: string, params: any[] = []): Promise<any> {
-  const res = await fetch(RPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  const { data, error } = await supabase.functions.invoke("solana-rpc", {
+    body: { method, params },
   });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message);
-  return json.result;
+  if (error) throw new Error(error.message || `${method} failed`);
+  if ((data as any)?.error) throw new Error((data as any).error);
+  return (data as any)?.result;
 }
 
 async function solscanMeta(address: string): Promise<any> {

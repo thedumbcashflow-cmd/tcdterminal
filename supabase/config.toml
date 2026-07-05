@@ -42,5 +42,8 @@ verify_jwt = false
 [functions.agent-proxy-replay]
 verify_jwt = false
 
+[functions.solana-rpc]
+verify_jwt = false
+
 
 
