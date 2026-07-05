@@ -189,6 +189,7 @@ Deno.serve(async (req) => {
         freezeAuthority: parsed?.freezeAuthority ?? null,
       },
       holders,
+      holdersSource,
       transfers: transfers.slice(0, 25),
       defi: defi.slice(0, 25),
       heliusEnabled: !!HELIUS_KEY,
