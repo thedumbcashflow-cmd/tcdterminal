@@ -89,11 +89,20 @@ const Index = () => {
 
   useEffect(() => {
     let cancelled = false;
+    let syncTriggered = false;
     const probe = async () => {
       setHealthLoading(true);
       const { data, error } = await supabase.functions.invoke("health-check");
       if (cancelled) return;
-      if (!error && data) setHealth(data as HealthResponse);
+      if (!error && data) {
+        const h = data as HealthResponse;
+        setHealth(h);
+        // Sheet Sync is stale/erroring and there's no cron → fire a one-shot sync.
+        if (!syncTriggered && !h.sheetSync?.ok) {
+          syncTriggered = true;
+          supabase.functions.invoke("sync-market-data").catch(() => {});
+        }
+      }
       setHealthLoading(false);
     };
     probe();
