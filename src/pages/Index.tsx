@@ -8,6 +8,7 @@ import LiquidationHeatmap from "@/components/LiquidationHeatmap";
 import { Loader2, TrendingUp, TrendingDown, Activity, DollarSign } from "lucide-react";
 import { useSolanaStats } from "@/hooks/useSolanaStats";
 import { supabase } from "@/integrations/supabase/client";
+import { maybeHealSheetSync } from "@/lib/sheetSyncHealer";
 
 interface HealthProbe {
   ok: boolean; status: string; latencyMs?: number | null;
