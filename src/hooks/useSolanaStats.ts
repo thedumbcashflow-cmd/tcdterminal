@@ -43,13 +43,40 @@ const INITIAL: SolanaStats = {
   loading: true, error: null, lastUpdated: null,
 };
 
+async function rpcDirect(method: string, params: any[]): Promise<any> {
+  let lastErr: unknown = null;
+  for (const url of FALLBACK_RPC_URLS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      if (!res.ok) { lastErr = new Error(`${url} HTTP ${res.status}`); continue; }
+      const j = await res.json();
+      if (j.error) { lastErr = new Error(j.error.message); continue; }
+      return j.result;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 async function rpc(method: string, params: any[] = []): Promise<any> {
-  const { data, error } = await supabase.functions.invoke("solana-rpc", {
-    body: { method, params },
-  });
-  if (error) throw new Error(error.message || `${method} failed`);
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return (data as any)?.result;
+  try {
+    const { data, error } = await supabase.functions.invoke("solana-rpc", {
+      body: { method, params },
+    });
+    if (error) throw new Error(error.message || `${method} failed`);
+    if ((data as any)?.error) throw new Error((data as any).error);
+    const result = (data as any)?.result;
+    if (result == null) throw new Error(`${method} returned no result`);
+    return result;
+  } catch (proxyErr) {
+    // Proxy OFFLINE / no result → last-ditch client fallback so the dashboard
+    // still shows live epoch/TPS/validator data.
+    console.warn(`[solana-rpc] proxy failed for ${method}, falling back:`, proxyErr);
+    return rpcDirect(method, params);
+  }
 }
 
 async function solscanMeta(address: string): Promise<any> {
