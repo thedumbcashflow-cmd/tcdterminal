@@ -102,18 +102,27 @@ export interface ProtocolRevenue {
 export async function fetchSolanaProtocolRevenue(): Promise<{
   totalDailyRevenue: number; protocols: ProtocolRevenue[];
 }> {
-  const data = await proxyFetch(
-    "defi_llama",
-    "/overview/fees/Solana?excludeTotalDataChart=false&excludeTotalDataChartBreakdown=false&dataType=dailyRevenue"
-  );
-  const protocols: ProtocolRevenue[] = (data.protocols ?? [])
-    .filter((p: any) => (p.dailyRevenue ?? 0) > 0)
-    .sort((a: any, b: any) => (b.dailyRevenue ?? 0) - (a.dailyRevenue ?? 0))
-    .slice(0, 10)
+  const [revData, feesData] = await Promise.all([
+    proxyFetch("defi_llama", "/overview/fees/Solana?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyRevenue"),
+    proxyFetch("defi_llama", "/overview/fees/Solana?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyFees").catch(() => null),
+  ]);
+  const feesByName = new Map<string, number>();
+  for (const p of (feesData?.protocols ?? [])) {
+    const v = Number(p.total24h ?? p.dailyFees ?? 0);
+    if (v > 0) feesByName.set(p.name, v);
+  }
+  const protocols: ProtocolRevenue[] = (revData.protocols ?? [])
     .map((p: any) => ({
-      name: p.name, logo: p.logo ?? "", category: p.category ?? "—",
-      dailyRevenue: p.dailyRevenue ?? 0, dailyFees: p.dailyFees ?? 0,
-      change_1d: p.change_1d ?? null, total7dRevenue: p.revenue7d ?? 0,
-    }));
-  return { totalDailyRevenue: data.total24h ?? 0, protocols };
+      name: p.name,
+      logo: p.logo ?? "",
+      category: p.category ?? "—",
+      dailyRevenue: Number(p.total24h ?? p.dailyRevenue ?? 0),
+      dailyFees: feesByName.get(p.name) ?? Number(p.total24h ?? 0),
+      change_1d: p.change_1d ?? null,
+      total7dRevenue: Number(p.total7d ?? p.revenue7d ?? 0),
+    }))
+    .filter((p: ProtocolRevenue) => p.dailyRevenue > 0)
+    .sort((a: ProtocolRevenue, b: ProtocolRevenue) => b.dailyRevenue - a.dailyRevenue)
+    .slice(0, 10);
+  return { totalDailyRevenue: Number(revData.total24h ?? 0), protocols };
 }
