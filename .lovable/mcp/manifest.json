@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "tcd-terminal-mcp",
+      "version": "0.1.0",
+      "title": "TCD Terminal MCP"
+    },
+    "tools": [
+      {
+        "name": "get_solana_network_stats",
+        "title": "Get Solana network stats",
+        "description": "Return live Solana mainnet network stats: current epoch, slot, block height, and recent transactions-per-second sampled from a validator.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_protocol_revenue",
+        "title": "Get top protocol revenue (Solana)",
+        "description": "Return top Solana protocols ranked by 24h revenue and fees from DeFiLlama's public API. Useful for identifying which protocols are earning the most.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "description": "Number of protocols to return (1-50)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_token_price",
+        "title": "Get Solana token price",
+        "description": "Look up the current USD price and 24h change for a Solana SPL token by mint address, via Jupiter's public price API.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": false,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mint": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 64,
+              "description": "Solana SPL token mint address (base58)."
+            }
+          },
+          "required": [
+            "mint"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
