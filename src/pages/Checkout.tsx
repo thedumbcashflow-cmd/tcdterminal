@@ -236,12 +236,17 @@ const Checkout = () => {
           </h2>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-foreground">
-              {PLAN_NAMES[plan]} Plan ({period})
+              {PLAN_NAMES[plan]}{plan !== "trial" ? ` Plan (${period})` : ""}
             </span>
             <span className="font-data text-lg font-bold text-primary">
               ${amount?.toLocaleString()}.00
             </span>
           </div>
+          {plan === "trial" && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              $1 card hold to verify — voided immediately. Full Pro access for 7 days, then $499/mo.
+            </p>
+          )}
         </div>
 
         {/* Payment Success */}
