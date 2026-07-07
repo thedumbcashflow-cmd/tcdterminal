@@ -242,7 +242,11 @@ const Pricing = () => {
             </div>
 
             <button
-              onClick={() => (user ? handleUpgrade("pro") : navigate("/auth"))}
+              onClick={() =>
+                user
+                  ? navigate("/checkout?plan=trial&period=monthly")
+                  : navigate("/auth")
+              }
               disabled={currentTier === "pro"}
               className={`w-full mt-6 py-2.5 font-mono text-xs rounded transition-colors ${
                 currentTier === "pro"
@@ -254,7 +258,7 @@ const Pricing = () => {
             </button>
             {currentTier !== "pro" && (
               <p className="font-mono text-[10px] text-zinc-500 text-center mt-2">
-                7 days free, then {getPrice(499, "monthly").display}/mo. Cancel anytime.
+                $1 card hold today, then {getPrice(499, "monthly").display}/mo after 7 days. Cancel anytime.
               </p>
             )}
           </div>
