@@ -6,15 +6,16 @@ import { Loader2, ArrowLeft, Shield } from "lucide-react";
 
 type BillingPeriod = "monthly" | "quarterly" | "yearly";
 
-const VALID_PLANS = ["pro", "whale"];
+const VALID_PLANS = ["pro", "whale", "trial"];
 const VALID_PERIODS: BillingPeriod[] = ["monthly", "quarterly", "yearly"];
 
 const PRICING: Record<string, Record<BillingPeriod, number>> = {
-  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
-  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
+  pro: { monthly: 499, quarterly: 1347, yearly: 4491 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22491 },
+  trial: { monthly: 1, quarterly: 1, yearly: 1 },
 };
 
-const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE" };
+const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE", trial: "7-DAY TRIAL" };
 
 const PAYPAL_CLIENT_ID =
   "ASzeRnkGYZQQppiMbDgOEKDFnvZrdC4DGELXwkSkOGMzD_2j2eh3TnQ53hj8r-eU3h-Q5HaMC3mLme00";
@@ -38,7 +39,7 @@ function loadPayPalSdk(clientId: string): Promise<void> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://www.sandbox.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${window.location.search.includes("plan=trial") ? "authorize" : "capture"}`;
     script.async = true;
     script.setAttribute("data-paypal-sdk", "true");
     script.onload = () => resolve();
@@ -106,6 +107,7 @@ const Checkout = () => {
   const handleApproval = useCallback(
     async (orderID: string) => {
       setProcessing(true);
+      const isTrial = plan === "trial";
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const resp = await fetch(
@@ -117,7 +119,7 @@ const Checkout = () => {
               Authorization: `Bearer ${sessionData.session?.access_token}`,
             },
             body: JSON.stringify({
-              event: "paypal.capture",
+              event: isTrial ? "paypal.trial" : "paypal.capture",
               order_id: orderID,
               plan,
               period,
@@ -128,18 +130,27 @@ const Checkout = () => {
         if (result.success) {
           setPaymentSuccess(true);
           setTimeout(
-            () => navigate(`/pricing?payment=success&plan=${plan}`),
+            () =>
+              navigate(
+                isTrial
+                  ? "/dashboard?trial=started"
+                  : `/pricing?payment=success&plan=${plan}`
+              ),
             2000
           );
         } else {
           setSdkError(
-            "Payment capture failed. Please contact support with reference: " +
+            (isTrial ? "Trial activation failed" : "Payment capture failed") +
+              ". Please contact support with reference: " +
               orderID
           );
         }
       } catch {
         setSdkError(
-          "Subscription approved by PayPal but could not be saved. Please contact support with reference: " +
+          (isTrial
+            ? "Trial approved by PayPal but could not be activated"
+            : "Subscription approved by PayPal but could not be saved") +
+            ". Please contact support with reference: " +
             orderID
         );
       }
@@ -225,12 +236,17 @@ const Checkout = () => {
           </h2>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-foreground">
-              {PLAN_NAMES[plan]} Plan ({period})
+              {PLAN_NAMES[plan]}{plan !== "trial" ? ` Plan (${period})` : ""}
             </span>
             <span className="font-data text-lg font-bold text-primary">
               ${amount?.toLocaleString()}.00
             </span>
           </div>
+          {plan === "trial" && (
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              $1 card hold to verify — voided immediately. Full Pro access for 7 days, then $499/mo.
+            </p>
+          )}
         </div>
 
         {/* Payment Success */}

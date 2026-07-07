@@ -37,9 +37,12 @@ function logCorsDenied(req: Request, origin: string | null) {
 }
 
 const PRICING: Record<string, Record<string, number>> = {
-  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
-  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
+  pro: { monthly: 499, quarterly: 1347, yearly: 4491 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22491 },
+  trial: { monthly: 1, quarterly: 1, yearly: 1 },
 };
+
+const PAYPAL_BASE = "https://api-m.paypal.com";
 
 serve(async (req) => {
   const cors = corsFor(req);
@@ -98,7 +101,7 @@ serve(async (req) => {
       });
     }
 
-    const tokenResp = await fetch("https://api-m.sandbox.paypal.com/v1/oauth2/token", {
+    const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
@@ -110,22 +113,27 @@ serve(async (req) => {
     const accessToken = tokenData.access_token;
 
     const returnOrigin = cors.origin || "https://tcdterminal.lovable.app";
-    const orderResp = await fetch("https://api-m.sandbox.paypal.com/v2/checkout/orders", {
+    const isTrial = plan === "trial";
+    const orderResp = await fetch(`${PAYPAL_BASE}/v2/checkout/orders`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        intent: "CAPTURE",
+        intent: isTrial ? "AUTHORIZE" : "CAPTURE",
         purchase_units: [{
           amount: { currency_code: "USD", value: amount.toFixed(2) },
-          description: `TCD Terminal ${plan.toUpperCase()} - ${period}`,
+          description: isTrial
+            ? "TCD Terminal — 7-day trial verification ($1 hold, voided)"
+            : `TCD Terminal ${plan.toUpperCase()} - ${period}`,
           custom_id: JSON.stringify({ user_id: user.id, plan, period }),
         }],
         application_context: {
           brand_name: "TCD Terminal",
-          return_url: `${returnOrigin}/pricing?payment=success&plan=${plan}`,
+          return_url: isTrial
+            ? `${returnOrigin}/dashboard?trial=started`
+            : `${returnOrigin}/pricing?payment=success&plan=${plan}`,
           cancel_url: `${returnOrigin}/pricing`,
         },
       }),

@@ -176,11 +176,11 @@ const Pricing = () => {
               Start with a 7-day free trial
             </h3>
             <p className="font-mono text-xs text-zinc-400 mt-1">
-              Full Professional access. No credit card required. Expires automatically — no surprise charges.
+              $1 card hold to verify — voided immediately. Full Pro access for 7 days, then $499/mo.
             </p>
           </div>
           <button
-            onClick={() => navigate("/auth")}
+            onClick={() => navigate(user ? "/checkout?plan=trial&period=monthly" : "/auth?next=/checkout?plan=trial&period=monthly")}
             className="bg-green-500 text-black hover:bg-green-400 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
           >
             Start 7-Day Trial →
@@ -242,7 +242,11 @@ const Pricing = () => {
             </div>
 
             <button
-              onClick={() => (user ? handleUpgrade("pro") : navigate("/auth"))}
+              onClick={() =>
+                user
+                  ? navigate("/checkout?plan=trial&period=monthly")
+                  : navigate("/auth")
+              }
               disabled={currentTier === "pro"}
               className={`w-full mt-6 py-2.5 font-mono text-xs rounded transition-colors ${
                 currentTier === "pro"
@@ -254,7 +258,7 @@ const Pricing = () => {
             </button>
             {currentTier !== "pro" && (
               <p className="font-mono text-[10px] text-zinc-500 text-center mt-2">
-                7 days free, then {getPrice(499, "monthly").display}/mo. Cancel anytime.
+                $1 card hold today, then {getPrice(499, "monthly").display}/mo after 7 days. Cancel anytime.
               </p>
             )}
           </div>

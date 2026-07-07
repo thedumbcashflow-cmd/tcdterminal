@@ -44,9 +44,11 @@ const PERIOD_MONTHS: Record<string, number> = {
 };
 
 const PRICING: Record<string, Record<string, number>> = {
-  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
-  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
+  pro: { monthly: 499, quarterly: 1347, yearly: 4491 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22491 },
 };
+
+const PAYPAL_BASE = "https://api-m.paypal.com";
 
 serve(async (req) => {
   const cors = corsFor(req);
@@ -91,6 +93,115 @@ serve(async (req) => {
     const body = await req.json();
     const event = body.event;
 
+    if (event === "paypal.trial") {
+      const { order_id } = body;
+      if (!order_id) {
+        return new Response(JSON.stringify({ error: "Missing order_id" }), {
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
+      const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
+      const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+
+      const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: "grant_type=client_credentials",
+      });
+      const tokenData = await tokenResp.json();
+      const accessToken = tokenData.access_token;
+
+      // Authorize the order (creates a hold, no funds captured)
+      const authorizeResp = await fetch(
+        `${PAYPAL_BASE}/v2/checkout/orders/${encodeURIComponent(order_id)}/authorize`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const authorizeData = await authorizeResp.json();
+      if (authorizeData.status !== "COMPLETED") {
+        console.error("PayPal authorize not completed:", authorizeData);
+        return new Response(JSON.stringify({ error: "Authorization not completed", details: authorizeData.status }), {
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
+      const purchaseUnit = authorizeData.purchase_units?.[0];
+      const authorization = purchaseUnit?.payments?.authorizations?.[0];
+      const authorizationId = authorization?.id;
+      const customId = authorization?.custom_id || purchaseUnit?.custom_id;
+
+      let userId = "";
+      try {
+        const parsed = JSON.parse(customId || "{}");
+        userId = parsed.user_id;
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid custom_id format" }), {
+          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!userId || userId !== callerId) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+        });
+      }
+
+      // Void the $1 hold immediately — no funds are ever captured
+      if (authorizationId) {
+        const voidResp = await fetch(
+          `${PAYPAL_BASE}/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        if (!voidResp.ok) {
+          console.error("PayPal void failed:", await voidResp.text());
+          // Continue anyway — the auth will expire in ~3 days if not captured
+        }
+      }
+
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+
+      // Grant Pro access for 7 days (trial). Tier stays 'pro'; trial_ends_at
+      // gates access. Nightly cron flips to 'free' after expiry.
+      const trialEnds = new Date();
+      trialEnds.setDate(trialEnds.getDate() + 7);
+
+      await supabaseAdmin.from("profiles").update({
+        subscription_tier: "pro",
+        trial_ends_at: trialEnds.toISOString(),
+      }).eq("id", userId);
+
+      await supabaseAdmin.from("subscriptions").upsert({
+        user_id: userId,
+        plan: "pro",
+        status: "trialing",
+        provider: "paypal",
+        provider_subscription_id: order_id,
+        current_period_end: trialEnds.toISOString(),
+      }, { onConflict: "user_id" });
+
+      console.log(`Started 7-day trial for user ${userId} (auth ${authorizationId} voided)`);
+
+      return new Response(JSON.stringify({ success: true, trial_ends_at: trialEnds.toISOString() }), {
+        headers: { ...cors.headers, "Content-Type": "application/json" },
+      });
+    }
+
+
     if (event === "paypal.capture") {
       const { order_id } = body;
 
@@ -103,7 +214,7 @@ serve(async (req) => {
       const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
       const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
 
-      const tokenResp = await fetch("https://api-m.sandbox.paypal.com/v1/oauth2/token", {
+      const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
         method: "POST",
         headers: {
           Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
@@ -113,7 +224,7 @@ serve(async (req) => {
       });
       const tokenData = await tokenResp.json();
 
-      const captureResp = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${encodeURIComponent(order_id)}/capture`, {
+      const captureResp = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${encodeURIComponent(order_id)}/capture`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
