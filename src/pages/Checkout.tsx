@@ -107,6 +107,7 @@ const Checkout = () => {
   const handleApproval = useCallback(
     async (orderID: string) => {
       setProcessing(true);
+      const isTrial = plan === "trial";
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const resp = await fetch(
@@ -118,7 +119,7 @@ const Checkout = () => {
               Authorization: `Bearer ${sessionData.session?.access_token}`,
             },
             body: JSON.stringify({
-              event: "paypal.capture",
+              event: isTrial ? "paypal.trial" : "paypal.capture",
               order_id: orderID,
               plan,
               period,
@@ -129,18 +130,27 @@ const Checkout = () => {
         if (result.success) {
           setPaymentSuccess(true);
           setTimeout(
-            () => navigate(`/pricing?payment=success&plan=${plan}`),
+            () =>
+              navigate(
+                isTrial
+                  ? "/dashboard?trial=started"
+                  : `/pricing?payment=success&plan=${plan}`
+              ),
             2000
           );
         } else {
           setSdkError(
-            "Payment capture failed. Please contact support with reference: " +
+            (isTrial ? "Trial activation failed" : "Payment capture failed") +
+              ". Please contact support with reference: " +
               orderID
           );
         }
       } catch {
         setSdkError(
-          "Subscription approved by PayPal but could not be saved. Please contact support with reference: " +
+          (isTrial
+            ? "Trial approved by PayPal but could not be activated"
+            : "Subscription approved by PayPal but could not be saved") +
+            ". Please contact support with reference: " +
             orderID
         );
       }
