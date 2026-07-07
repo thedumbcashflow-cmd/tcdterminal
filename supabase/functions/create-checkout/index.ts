@@ -37,9 +37,12 @@ function logCorsDenied(req: Request, origin: string | null) {
 }
 
 const PRICING: Record<string, Record<string, number>> = {
-  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
-  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
+  pro: { monthly: 499, quarterly: 1347, yearly: 4491 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22491 },
+  trial: { monthly: 1, quarterly: 1, yearly: 1 },
 };
+
+const PAYPAL_BASE = "https://api-m.paypal.com";
 
 serve(async (req) => {
   const cors = corsFor(req);
