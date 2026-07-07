@@ -176,11 +176,11 @@ const Pricing = () => {
               Start with a 7-day free trial
             </h3>
             <p className="font-mono text-xs text-zinc-400 mt-1">
-              Full Professional access. No credit card required. Expires automatically — no surprise charges.
+              $1 card hold to verify — voided immediately. Full Pro access for 7 days, then $499/mo.
             </p>
           </div>
           <button
-            onClick={() => navigate("/auth")}
+            onClick={() => navigate(user ? "/checkout?plan=trial&period=monthly" : "/auth?next=/checkout?plan=trial&period=monthly")}
             className="bg-green-500 text-black hover:bg-green-400 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
           >
             Start 7-Day Trial →
