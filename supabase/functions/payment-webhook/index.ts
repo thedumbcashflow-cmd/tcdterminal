@@ -105,7 +105,7 @@ serve(async (req) => {
       const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
       const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
 
-      const tokenResp = await fetch("https://api-m.sandbox.paypal.com/v1/oauth2/token", {
+      const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
         method: "POST",
         headers: {
           Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
@@ -115,7 +115,7 @@ serve(async (req) => {
       });
       const tokenData = await tokenResp.json();
 
-      const captureResp = await fetch(`https://api-m.sandbox.paypal.com/v2/checkout/orders/${encodeURIComponent(order_id)}/capture`, {
+      const captureResp = await fetch(`${PAYPAL_BASE}/v2/checkout/orders/${encodeURIComponent(order_id)}/capture`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
