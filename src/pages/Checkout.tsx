@@ -6,15 +6,16 @@ import { Loader2, ArrowLeft, Shield } from "lucide-react";
 
 type BillingPeriod = "monthly" | "quarterly" | "yearly";
 
-const VALID_PLANS = ["pro", "whale"];
+const VALID_PLANS = ["pro", "whale", "trial"];
 const VALID_PERIODS: BillingPeriod[] = ["monthly", "quarterly", "yearly"];
 
 const PRICING: Record<string, Record<BillingPeriod, number>> = {
-  pro: { monthly: 499, quarterly: 1349, yearly: 4499 },
-  whale: { monthly: 2499, quarterly: 6747, yearly: 22499 },
+  pro: { monthly: 499, quarterly: 1347, yearly: 4491 },
+  whale: { monthly: 2499, quarterly: 6747, yearly: 22491 },
+  trial: { monthly: 1, quarterly: 1, yearly: 1 },
 };
 
-const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE" };
+const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE", trial: "7-DAY TRIAL" };
 
 const PAYPAL_CLIENT_ID =
   "ASzeRnkGYZQQppiMbDgOEKDFnvZrdC4DGELXwkSkOGMzD_2j2eh3TnQ53hj8r-eU3h-Q5HaMC3mLme00";
