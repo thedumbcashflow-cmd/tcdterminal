@@ -39,7 +39,7 @@ function loadPayPalSdk(clientId: string): Promise<void> {
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://www.sandbox.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${window.location.search.includes("plan=trial") ? "authorize" : "capture"}`;
     script.async = true;
     script.setAttribute("data-paypal-sdk", "true");
     script.onload = () => resolve();
