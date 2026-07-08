@@ -103,6 +103,10 @@ const Checkout = () => {
   // Phase 1: Load SDK
   useEffect(() => {
     if (!isValid) return;
+    if (!PAYPAL_CLIENT_ID) {
+      setSdkError("Payment provider is not configured (missing client ID). Please contact support.");
+      return;
+    }
     loadPayPalSdk(PAYPAL_CLIENT_ID)
       .then(() => setSdkReady(true))
       .catch(() => setSdkError("Failed to load PayPal SDK. Please refresh."));
