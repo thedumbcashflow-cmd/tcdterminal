@@ -17,8 +17,7 @@ const PRICING: Record<string, Record<BillingPeriod, number>> = {
 
 const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE", trial: "7-DAY TRIAL" };
 
-const PAYPAL_CLIENT_ID =
-  "ASzeRnkGYZQQppiMbDgOEKDFnvZrdC4DGELXwkSkOGMzD_2j2eh3TnQ53hj8r-eU3h-Q5HaMC3mLme00";
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID as string;
 
 declare global {
   interface Window {
