@@ -196,10 +196,8 @@ serve(async (req) => {
         }
       }
 
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
+      // supabaseAdmin already created above for idempotency check
+
 
       // Grant Pro access for 7 days (trial). Tier stays 'pro'; trial_ends_at
       // gates access. Nightly cron flips to 'free' after expiry.
