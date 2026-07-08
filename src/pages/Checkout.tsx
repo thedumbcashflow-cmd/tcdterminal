@@ -17,7 +17,12 @@ const PRICING: Record<string, Record<BillingPeriod, number>> = {
 
 const PLAN_NAMES: Record<string, string> = { pro: "PRO", whale: "WHALE", trial: "7-DAY TRIAL" };
 
-const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID as string;
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID as string | undefined;
+if (!PAYPAL_CLIENT_ID || PAYPAL_CLIENT_ID.trim() === "") {
+  // Fail fast so the error surfaces at load, not on button click.
+  // eslint-disable-next-line no-console
+  console.error("VITE_PAYPAL_CLIENT_ID is missing or empty. PayPal checkout will not work.");
+}
 
 declare global {
   interface Window {
