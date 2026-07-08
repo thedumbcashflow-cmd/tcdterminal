@@ -96,9 +96,35 @@ serve(async (req) => {
     if (event === "paypal.trial") {
       const { order_id } = body;
       if (!order_id) {
-        return new Response(JSON.stringify({ error: "Missing order_id" }), {
+        return new Response(JSON.stringify({ error: "Missing order_id", code: "missing_order_id" }), {
           status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
         });
+      }
+
+      // Idempotency: if this order_id was already processed for this caller,
+      // return success without re-authorizing (PayPal would 422 on replay anyway).
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      const { data: existing } = await supabaseAdmin
+        .from("subscriptions")
+        .select("user_id, current_period_end, status")
+        .eq("provider", "paypal")
+        .eq("provider_subscription_id", order_id)
+        .maybeSingle();
+      if (existing) {
+        if (existing.user_id !== callerId) {
+          return new Response(JSON.stringify({ error: "Forbidden", code: "order_owned_by_other_user" }), {
+            status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
+          });
+        }
+        console.log(`Idempotent replay of trial order ${order_id} for user ${callerId}`);
+        return new Response(JSON.stringify({
+          success: true,
+          idempotent: true,
+          trial_ends_at: existing.current_period_end,
+        }), { headers: { ...cors.headers, "Content-Type": "application/json" } });
       }
 
       const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
@@ -170,10 +196,8 @@ serve(async (req) => {
         }
       }
 
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
+      // supabaseAdmin already created above for idempotency check
+
 
       // Grant Pro access for 7 days (trial). Tier stays 'pro'; trial_ends_at
       // gates access. Nightly cron flips to 'free' after expiry.
