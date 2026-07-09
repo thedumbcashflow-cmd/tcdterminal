@@ -109,18 +109,30 @@ const Pricing = () => {
       return;
     }
     setSovSubmitting(true);
-    const { error } = await supabase.from("sovereign_applications" as any).insert({
-      user_id: user.id,
-      applicant_name: sovName.trim().slice(0, 200),
-      fund_name: sovFund.trim().slice(0, 200),
-      aum_bracket: sovAum,
-      contact_email: sovEmail.trim().slice(0, 255),
-      message: sovMessage.trim().slice(0, 2000) || null,
-    } as any);
+    const { data: inserted, error } = await supabase
+      .from("sovereign_applications" as any)
+      .insert({
+        user_id: user.id,
+        applicant_name: sovName.trim().slice(0, 200),
+        fund_name: sovFund.trim().slice(0, 200),
+        aum_bracket: sovAum,
+        contact_email: sovEmail.trim().slice(0, 255),
+        message: sovMessage.trim().slice(0, 2000) || null,
+      } as any)
+      .select("id")
+      .maybeSingle();
     setSovSubmitting(false);
     if (error) {
       setSovError(error.message || "Submission failed. Please try again.");
       return;
+    }
+    // Fire-and-forget email notification; log-only on failure so the user
+    // isn't blocked if Resend is misconfigured.
+    const appId = (inserted as { id?: string } | null)?.id;
+    if (appId) {
+      supabase.functions
+        .invoke("notify-sovereign-application", { body: { application_id: appId } })
+        .catch((e) => console.error("notify-sovereign-application failed:", e));
     }
     setSovSuccess(true);
     setSovName("");
