@@ -94,69 +94,117 @@ serve(async (req) => {
     const event = body.event;
 
     if (event === "paypal.trial") {
-      const { order_id } = body;
-      if (!order_id) {
-        return new Response(JSON.stringify({ error: "Missing order_id", code: "missing_order_id" }), {
-          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+      const request_id = crypto.randomUUID();
+      const trialLog = (level: "log" | "error", msg: string, extra?: unknown) => {
+        const line = JSON.stringify({
+          request_id, event: "paypal.trial", caller: callerId, msg, ...(extra as object || {}),
         });
-      }
+        if (level === "error") console.error(line); else console.log(line);
+      };
+      const fail = (status: number, code: string, message: string, extra?: unknown) => {
+        trialLog("error", message, { code, status, ...(extra as object || {}) });
+        return new Response(
+          JSON.stringify({ success: false, error: message, code, request_id, ...(extra as object || {}) }),
+          { status, headers: { ...cors.headers, "Content-Type": "application/json" } },
+        );
+      };
 
-      // Idempotency: if this order_id was already processed for this caller,
-      // return success without re-authorizing (PayPal would 422 on replay anyway).
+      const { order_id } = body;
+      if (!order_id || typeof order_id !== "string") {
+        return fail(400, "missing_order_id", "Missing or invalid order_id");
+      }
+      trialLog("log", "trial_request_received", { order_id });
+
+      // Idempotency check
       const supabaseAdmin = createClient(
         Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       );
-      const { data: existing } = await supabaseAdmin
+      const { data: existing, error: existingErr } = await supabaseAdmin
         .from("subscriptions")
         .select("user_id, current_period_end, status")
         .eq("provider", "paypal")
         .eq("provider_subscription_id", order_id)
         .maybeSingle();
+      if (existingErr) {
+        return fail(500, "db_lookup_failed", "Could not check existing subscription", { db_error: existingErr.message });
+      }
       if (existing) {
         if (existing.user_id !== callerId) {
-          return new Response(JSON.stringify({ error: "Forbidden", code: "order_owned_by_other_user" }), {
-            status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
-          });
+          return fail(403, "order_owned_by_other_user", "This order belongs to another account");
         }
-        console.log(`Idempotent replay of trial order ${order_id} for user ${callerId}`);
+        trialLog("log", "idempotent_replay", { order_id, trial_ends_at: existing.current_period_end });
         return new Response(JSON.stringify({
-          success: true,
-          idempotent: true,
+          success: true, idempotent: true, request_id,
           trial_ends_at: existing.current_period_end,
         }), { headers: { ...cors.headers, "Content-Type": "application/json" } });
       }
 
       const clientId = Deno.env.get("PAYPAL_CLIENT_ID");
       const clientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+      if (!clientId || !clientSecret) {
+        return fail(500, "paypal_credentials_missing", "PayPal credentials not configured");
+      }
 
-      const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "grant_type=client_credentials",
-      });
-      const tokenData = await tokenResp.json();
-      const accessToken = tokenData.access_token;
-
-      // Authorize the order (creates a hold, no funds captured)
-      const authorizeResp = await fetch(
-        `${PAYPAL_BASE}/v2/checkout/orders/${encodeURIComponent(order_id)}/authorize`,
-        {
+      // Get PayPal access token
+      let accessToken: string;
+      try {
+        const tokenResp = await fetch(`${PAYPAL_BASE}/v1/oauth2/token`, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
+            Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+            "Content-Type": "application/x-www-form-urlencoded",
           },
+          body: "grant_type=client_credentials",
+        });
+        if (!tokenResp.ok) {
+          const txt = await tokenResp.text();
+          return fail(502, "paypal_token_failed", "Could not obtain PayPal access token", {
+            paypal_status: tokenResp.status, paypal_body: txt.slice(0, 500),
+          });
         }
-      );
-      const authorizeData = await authorizeResp.json();
+        const tokenData = await tokenResp.json();
+        accessToken = tokenData.access_token;
+        if (!accessToken) {
+          return fail(502, "paypal_token_missing", "PayPal returned no access_token");
+        }
+      } catch (e) {
+        return fail(502, "paypal_token_network", "Network error obtaining PayPal token", { detail: String(e) });
+      }
+
+      // Authorize the order
+      let authorizeData: any;
+      try {
+        const authorizeResp = await fetch(
+          `${PAYPAL_BASE}/v2/checkout/orders/${encodeURIComponent(order_id)}/authorize`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+              "PayPal-Request-Id": `trial-${order_id}`,
+            },
+          },
+        );
+        const rawText = await authorizeResp.text();
+        try { authorizeData = JSON.parse(rawText); } catch { authorizeData = { _raw: rawText }; }
+        if (!authorizeResp.ok) {
+          const debugId = authorizeResp.headers.get("paypal-debug-id");
+          return fail(502, "paypal_authorize_http_error", "PayPal authorize call failed", {
+            paypal_status: authorizeResp.status,
+            paypal_debug_id: debugId,
+            paypal_name: authorizeData?.name,
+            paypal_message: authorizeData?.message,
+            paypal_details: authorizeData?.details,
+          });
+        }
+      } catch (e) {
+        return fail(502, "paypal_authorize_network", "Network error calling PayPal authorize", { detail: String(e) });
+      }
+
       if (authorizeData.status !== "COMPLETED") {
-        console.error("PayPal authorize not completed:", authorizeData);
-        return new Response(JSON.stringify({ error: "Authorization not completed", details: authorizeData.status }), {
-          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
+        return fail(400, "paypal_authorize_not_completed", "PayPal did not complete authorization", {
+          paypal_status: authorizeData.status,
         });
       }
 
@@ -170,46 +218,49 @@ serve(async (req) => {
         const parsed = JSON.parse(customId || "{}");
         userId = parsed.user_id;
       } catch {
-        return new Response(JSON.stringify({ error: "Invalid custom_id format" }), {
-          status: 400, headers: { ...cors.headers, "Content-Type": "application/json" },
-        });
+        return fail(400, "invalid_custom_id", "custom_id on the order is not valid JSON");
       }
-
-      if (!userId || userId !== callerId) {
-        return new Response(JSON.stringify({ error: "Forbidden" }), {
-          status: 403, headers: { ...cors.headers, "Content-Type": "application/json" },
-        });
+      if (!userId) {
+        return fail(400, "missing_user_id_in_order", "custom_id did not include a user_id");
+      }
+      if (userId !== callerId) {
+        return fail(403, "caller_mismatch", "Caller does not match the user_id embedded in the order");
       }
 
       // Void the $1 hold immediately — no funds are ever captured
       if (authorizationId) {
-        const voidResp = await fetch(
-          `${PAYPAL_BASE}/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}` },
+        try {
+          const voidResp = await fetch(
+            `${PAYPAL_BASE}/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`,
+            { method: "POST", headers: { Authorization: `Bearer ${accessToken}` } },
+          );
+          if (!voidResp.ok) {
+            const txt = await voidResp.text();
+            trialLog("error", "paypal_void_failed_nonfatal", {
+              paypal_status: voidResp.status, paypal_body: txt.slice(0, 300),
+            });
+            // Non-fatal: the auth will expire in ~3 days
+          } else {
+            trialLog("log", "paypal_void_ok", { authorization_id: authorizationId });
           }
-        );
-        if (!voidResp.ok) {
-          console.error("PayPal void failed:", await voidResp.text());
-          // Continue anyway — the auth will expire in ~3 days if not captured
+        } catch (e) {
+          trialLog("error", "paypal_void_network_nonfatal", { detail: String(e) });
         }
       }
 
-      // supabaseAdmin already created above for idempotency check
-
-
-      // Grant Pro access for 7 days (trial). Tier stays 'pro'; trial_ends_at
-      // gates access. Nightly cron flips to 'free' after expiry.
+      // Grant Pro access for 7 days
       const trialEnds = new Date();
       trialEnds.setDate(trialEnds.getDate() + 7);
 
-      await supabaseAdmin.from("profiles").update({
+      const { error: profErr } = await supabaseAdmin.from("profiles").update({
         subscription_tier: "pro",
         trial_ends_at: trialEnds.toISOString(),
       }).eq("id", userId);
+      if (profErr) {
+        return fail(500, "profile_update_failed", "Could not upgrade profile to trial", { db_error: profErr.message });
+      }
 
-      await supabaseAdmin.from("subscriptions").upsert({
+      const { error: subErr } = await supabaseAdmin.from("subscriptions").upsert({
         user_id: userId,
         plan: "pro",
         status: "trialing",
@@ -217,12 +268,17 @@ serve(async (req) => {
         provider_subscription_id: order_id,
         current_period_end: trialEnds.toISOString(),
       }, { onConflict: "user_id" });
+      if (subErr) {
+        return fail(500, "subscription_upsert_failed", "Could not record trial subscription", { db_error: subErr.message });
+      }
 
-      console.log(`Started 7-day trial for user ${userId} (auth ${authorizationId} voided)`);
-
-      return new Response(JSON.stringify({ success: true, trial_ends_at: trialEnds.toISOString() }), {
-        headers: { ...cors.headers, "Content-Type": "application/json" },
+      trialLog("log", "trial_activated", {
+        order_id, authorization_id: authorizationId, trial_ends_at: trialEnds.toISOString(),
       });
+
+      return new Response(JSON.stringify({
+        success: true, request_id, trial_ends_at: trialEnds.toISOString(),
+      }), { headers: { ...cors.headers, "Content-Type": "application/json" } });
     }
 
 
