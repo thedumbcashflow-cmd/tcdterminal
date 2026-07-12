@@ -10,8 +10,8 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
 ];
 
-const NOTIFY_TO = "thedumbcashflow@gmail.com";
-const FROM_ADDR = "TCD Terminal <onboarding@resend.dev>";
+const NOTIFY_TO = Deno.env.get("SOVEREIGN_NOTIFY_EMAIL") || "thedumbcashflow@gmail.com";
+const FROM_ADDR = Deno.env.get("SOVEREIGN_NOTIFY_FROM") || "TCD Terminal <onboarding@resend.dev>";
 
 function corsFor(req: Request) {
   const origin = req.headers.get("Origin");
