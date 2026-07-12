@@ -9,6 +9,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import TierPreview from "@/components/admin/TierPreview";
 import AuditLog from "@/components/admin/AuditLog";
 import SecurityTrend from "@/components/admin/SecurityTrend";
+import SovereignApplications from "@/components/admin/SovereignApplications";
 
 type MarketIntel = Tables<"market_intel">;
 
