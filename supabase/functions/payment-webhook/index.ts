@@ -308,6 +308,10 @@ serve(async (req) => {
       trialLog("log", "trial_activated", {
         order_id, authorization_id: authorizationId, trial_ends_at: trialEnds.toISOString(),
       });
+      void auditLog({
+        request_id, order_id, paypal_event: "paypal.trial", status: "success", http_status: 200,
+        payload: { authorization_id: authorizationId, trial_ends_at: trialEnds.toISOString() },
+      });
 
       return new Response(JSON.stringify({
         success: true, request_id, trial_ends_at: trialEnds.toISOString(),
