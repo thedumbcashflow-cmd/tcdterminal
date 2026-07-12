@@ -434,6 +434,10 @@ serve(async (req) => {
       }, { onConflict: "user_id" });
 
       console.log(`Upgraded user ${userId} to ${plan} (${period})`);
+      void auditLog({
+        order_id, paypal_event: "paypal.capture", status: "success", http_status: 200,
+        payload: { plan, period, amount: capturedAmount },
+      });
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...cors.headers, "Content-Type": "application/json" },
