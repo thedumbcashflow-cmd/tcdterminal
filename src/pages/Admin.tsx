@@ -279,6 +279,7 @@ const Admin = () => {
             {tab === "audit" && (<><ScrollText className="h-3 w-3" /> Audit Log</>)}
             {tab === "tier-preview" && (<><FlaskConical className="h-3 w-3" /> Tier Preview</>)}
             {tab === "security" && (<><ShieldAlert className="h-3 w-3" /> Security Trend</>)}
+            {tab === "sovereign" && (<><Shield className="h-3 w-3" /> Sovereign</>)}
           </button>
         ))}
       </div>
