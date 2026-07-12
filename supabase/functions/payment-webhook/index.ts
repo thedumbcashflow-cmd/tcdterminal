@@ -166,6 +166,7 @@ serve(async (req) => {
           return fail(403, "order_owned_by_other_user", "This order belongs to another account");
         }
         trialLog("log", "idempotent_replay", { order_id, trial_ends_at: existing.current_period_end });
+        void auditLog({ request_id, order_id, paypal_event: "paypal.trial", status: "idempotent", http_status: 200 });
         return new Response(JSON.stringify({
           success: true, idempotent: true, request_id,
           trial_ends_at: existing.current_period_end,
