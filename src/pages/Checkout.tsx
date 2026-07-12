@@ -277,6 +277,9 @@ const Checkout = () => {
               Redirecting to your account...
             </p>
           </div>
+        )}
+
+
 
         {/* Webhook error panel */}
         {webhookError && !paymentSuccess && (
