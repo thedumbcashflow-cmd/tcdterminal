@@ -120,13 +120,23 @@ serve(async (req) => {
     if (!resendResp.ok) {
       const txt = await resendResp.text();
       console.error(`Resend failed [${resendResp.status}]: ${txt}`);
+      await admin.from("sovereign_applications").update({
+        email_error: `[${resendResp.status}] ${txt.slice(0, 500)}`,
+      }).eq("id", app.id);
       return new Response(JSON.stringify({ error: "Email send failed", status: resendResp.status, details: txt }), {
         status: 502, headers: { ...cors.headers, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`Sovereign notification sent for application ${app.id}`);
-    return new Response(JSON.stringify({ success: true }), {
+    const resendData = await resendResp.json().catch(() => ({}));
+    await admin.from("sovereign_applications").update({
+      email_sent_at: new Date().toISOString(),
+      email_message_id: resendData?.id ?? null,
+      email_error: null,
+    }).eq("id", app.id);
+
+    console.log(`Sovereign notification sent for application ${app.id} to ${NOTIFY_TO}`);
+    return new Response(JSON.stringify({ success: true, recipient: NOTIFY_TO, message_id: resendData?.id ?? null }), {
       headers: { ...cors.headers, "Content-Type": "application/json" },
     });
   } catch (e) {
