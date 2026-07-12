@@ -28,7 +28,7 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit" | "security">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit" | "security" | "sovereign">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
   const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
