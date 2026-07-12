@@ -262,7 +262,7 @@ const Admin = () => {
             "roles",
             "requests",
             "monitoring",
-            ...(role === "admin" ? (["audit", "tier-preview", "security"] as const) : []),
+            ...(role === "admin" ? (["sovereign", "audit", "tier-preview", "security"] as const) : []),
           ] as const
         ).map((tab) => (
           <button
