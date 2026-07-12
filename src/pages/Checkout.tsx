@@ -89,6 +89,10 @@ const Checkout = () => {
 
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
+  const [webhookError, setWebhookError] = useState<{
+    code: string; message: string; orderId: string; requestId?: string;
+    httpStatus?: number; paypalDebugId?: string;
+  } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [buttonError, setButtonError] = useState<string | null>(null);
@@ -134,8 +138,11 @@ const Checkout = () => {
             }),
           }
         );
-        const result = await resp.json();
-        if (result.success) {
+        const raw = await resp.text();
+        let result: any = {};
+        try { result = JSON.parse(raw); } catch { result = { _raw: raw }; }
+        if (resp.ok && result.success) {
+          // Only redirect after webhook confirms trial/subscription activation
           setPaymentSuccess(true);
           setTimeout(
             () =>
@@ -147,20 +154,23 @@ const Checkout = () => {
             2000
           );
         } else {
-          setSdkError(
-            (isTrial ? "Trial activation failed" : "Payment capture failed") +
-              ". Please contact support with reference: " +
-              orderID
-          );
+          setWebhookError({
+            code: result.code || `http_${resp.status}`,
+            message: result.error || result.message || (isTrial ? "Trial activation failed" : "Payment capture failed"),
+            orderId: orderID,
+            requestId: result.request_id,
+            httpStatus: resp.status,
+            paypalDebugId: result.paypal_debug_id,
+          });
         }
-      } catch {
-        setSdkError(
-          (isTrial
-            ? "Trial approved by PayPal but could not be activated"
-            : "Subscription approved by PayPal but could not be saved") +
-            ". Please contact support with reference: " +
-            orderID
-        );
+      } catch (e) {
+        setWebhookError({
+          code: "network_error",
+          message: (isTrial
+            ? "Trial approved by PayPal but the activation request failed to reach our server."
+            : "Subscription approved by PayPal but the confirmation request failed to reach our server."),
+          orderId: orderID,
+        });
       }
       setProcessing(false);
     },
@@ -268,6 +278,53 @@ const Checkout = () => {
             </p>
           </div>
         )}
+
+
+
+        {/* Webhook error panel */}
+        {webhookError && !paymentSuccess && (
+          <div className="border border-destructive bg-destructive/10 p-4 mb-4">
+            <p className="text-sm font-bold text-destructive uppercase tracking-wider">
+              ⚠ {plan === "trial" ? "Trial Activation Failed" : "Payment Not Recorded"}
+            </p>
+            <p className="mt-2 text-xs text-foreground">{webhookError.message}</p>
+            <div className="mt-3 grid grid-cols-1 gap-1 font-data text-[10px] text-muted-foreground">
+              <div><span className="uppercase tracking-wider">Error code:</span> <span className="text-destructive">{webhookError.code}</span></div>
+              <div><span className="uppercase tracking-wider">Order ID:</span> {webhookError.orderId}</div>
+              {webhookError.requestId && <div><span className="uppercase tracking-wider">Request ID:</span> {webhookError.requestId}</div>}
+              {webhookError.httpStatus && <div><span className="uppercase tracking-wider">HTTP:</span> {webhookError.httpStatus}</div>}
+              {webhookError.paypalDebugId && <div><span className="uppercase tracking-wider">PayPal Debug ID:</span> {webhookError.paypalDebugId}</div>}
+            </div>
+            <div className="mt-3 border-t border-destructive/30 pt-2 text-[11px] text-foreground">
+              <p className="font-bold uppercase tracking-wider text-muted-foreground mb-1">Next steps</p>
+              {webhookError.code === "order_owned_by_other_user" && (
+                <p>This PayPal order is tied to a different account. Sign in with that account or start a new checkout.</p>
+              )}
+              {webhookError.code === "paypal_authorize_http_error" && (
+                <p>PayPal rejected the card at authorization. Try a different card or contact your bank. If it keeps failing, email support with the PayPal Debug ID above.</p>
+              )}
+              {webhookError.code === "paypal_credentials_missing" && (
+                <p>The server is missing PayPal credentials. Contact support — no charge was made.</p>
+              )}
+              {webhookError.code === "paypal_token_failed" && (
+                <p>We couldn't reach PayPal to confirm your payment. Wait a minute and retry; if it persists, contact support.</p>
+              )}
+              {webhookError.code === "network_error" && (
+                <p>Your PayPal approval went through but our server didn't receive it. Do not re-pay — contact support with the Order ID and we'll activate your account.</p>
+              )}
+              {!["order_owned_by_other_user","paypal_authorize_http_error","paypal_credentials_missing","paypal_token_failed","network_error"].includes(webhookError.code) && (
+                <p>Contact support with the Order ID and Request ID above — no need to retry payment.</p>
+              )}
+            </div>
+            <button
+              onClick={() => setWebhookError(null)}
+              className="mt-3 border border-border bg-background px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
 
         {/* Processing overlay */}
         {processing && (

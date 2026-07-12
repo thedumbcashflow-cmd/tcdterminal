@@ -9,6 +9,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import TierPreview from "@/components/admin/TierPreview";
 import AuditLog from "@/components/admin/AuditLog";
 import SecurityTrend from "@/components/admin/SecurityTrend";
+import SovereignApplications from "@/components/admin/SovereignApplications";
 
 type MarketIntel = Tables<"market_intel">;
 
@@ -27,7 +28,7 @@ const Admin = () => {
   const [loadingData, setLoadingData] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [showAdd, setShowAdd] = useState(false);
-  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit" | "security">("data");
+  const [activeTab, setActiveTab] = useState<"data" | "roles" | "monitoring" | "requests" | "tier-preview" | "audit" | "security" | "sovereign">("data");
   const [adminTier, setAdminTier] = useState<string>("free");
   const [role, setRole] = useState<"admin" | "moderator" | null>(null);
 
@@ -261,7 +262,7 @@ const Admin = () => {
             "roles",
             "requests",
             "monitoring",
-            ...(role === "admin" ? (["audit", "tier-preview", "security"] as const) : []),
+            ...(role === "admin" ? (["sovereign", "audit", "tier-preview", "security"] as const) : []),
           ] as const
         ).map((tab) => (
           <button
@@ -278,6 +279,7 @@ const Admin = () => {
             {tab === "audit" && (<><ScrollText className="h-3 w-3" /> Audit Log</>)}
             {tab === "tier-preview" && (<><FlaskConical className="h-3 w-3" /> Tier Preview</>)}
             {tab === "security" && (<><ShieldAlert className="h-3 w-3" /> Security Trend</>)}
+            {tab === "sovereign" && (<><Shield className="h-3 w-3" /> Sovereign</>)}
           </button>
         ))}
       </div>
@@ -649,6 +651,10 @@ const Admin = () => {
         {/* SECURITY TREND TAB — admin only */}
         {activeTab === "security" && role === "admin" && (
           <SecurityTrend />
+        )}
+
+        {activeTab === "sovereign" && role === "admin" && (
+          <SovereignApplications />
         )}
       </div>
     </div>

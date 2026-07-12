@@ -93,6 +93,33 @@ serve(async (req) => {
     const body = await req.json();
     const event = body.event;
 
+    // Shared audit-log client (best-effort — logging failures never break the flow)
+    const auditAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const auditLog = async (row: {
+      request_id?: string; order_id?: string; paypal_event: string;
+      status: string; http_status?: number; error_code?: string; error_message?: string;
+      payload?: unknown;
+    }) => {
+      try {
+        await auditAdmin.from("payment_webhook_log").insert({
+          request_id: row.request_id ?? null,
+          order_id: row.order_id ?? null,
+          paypal_event: row.paypal_event,
+          caller_user_id: callerId,
+          status: row.status,
+          http_status: row.http_status ?? null,
+          error_code: row.error_code ?? null,
+          error_message: row.error_message ?? null,
+          payload: (row.payload as any) ?? null,
+        });
+      } catch (e) {
+        console.error("audit_log_insert_failed", String(e));
+      }
+    };
+
     if (event === "paypal.trial") {
       const request_id = crypto.randomUUID();
       const trialLog = (level: "log" | "error", msg: string, extra?: unknown) => {
@@ -103,6 +130,11 @@ serve(async (req) => {
       };
       const fail = (status: number, code: string, message: string, extra?: unknown) => {
         trialLog("error", message, { code, status, ...(extra as object || {}) });
+        void auditLog({
+          request_id, order_id: body?.order_id, paypal_event: "paypal.trial",
+          status: "error", http_status: status, error_code: code, error_message: message,
+          payload: extra,
+        });
         return new Response(
           JSON.stringify({ success: false, error: message, code, request_id, ...(extra as object || {}) }),
           { status, headers: { ...cors.headers, "Content-Type": "application/json" } },
@@ -134,6 +166,7 @@ serve(async (req) => {
           return fail(403, "order_owned_by_other_user", "This order belongs to another account");
         }
         trialLog("log", "idempotent_replay", { order_id, trial_ends_at: existing.current_period_end });
+        void auditLog({ request_id, order_id, paypal_event: "paypal.trial", status: "idempotent", http_status: 200 });
         return new Response(JSON.stringify({
           success: true, idempotent: true, request_id,
           trial_ends_at: existing.current_period_end,
@@ -275,6 +308,10 @@ serve(async (req) => {
       trialLog("log", "trial_activated", {
         order_id, authorization_id: authorizationId, trial_ends_at: trialEnds.toISOString(),
       });
+      void auditLog({
+        request_id, order_id, paypal_event: "paypal.trial", status: "success", http_status: 200,
+        payload: { authorization_id: authorizationId, trial_ends_at: trialEnds.toISOString() },
+      });
 
       return new Response(JSON.stringify({
         success: true, request_id, trial_ends_at: trialEnds.toISOString(),
@@ -397,6 +434,10 @@ serve(async (req) => {
       }, { onConflict: "user_id" });
 
       console.log(`Upgraded user ${userId} to ${plan} (${period})`);
+      void auditLog({
+        order_id, paypal_event: "paypal.capture", status: "success", http_status: 200,
+        payload: { plan, period, amount: capturedAmount },
+      });
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...cors.headers, "Content-Type": "application/json" },
