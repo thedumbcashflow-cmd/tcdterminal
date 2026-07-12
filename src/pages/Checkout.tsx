@@ -89,6 +89,10 @@ const Checkout = () => {
 
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
+  const [webhookError, setWebhookError] = useState<{
+    code: string; message: string; orderId: string; requestId?: string;
+    httpStatus?: number; paypalDebugId?: string;
+  } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [buttonError, setButtonError] = useState<string | null>(null);
