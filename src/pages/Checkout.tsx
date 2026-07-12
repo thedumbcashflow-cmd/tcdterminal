@@ -138,8 +138,11 @@ const Checkout = () => {
             }),
           }
         );
-        const result = await resp.json();
-        if (result.success) {
+        const raw = await resp.text();
+        let result: any = {};
+        try { result = JSON.parse(raw); } catch { result = { _raw: raw }; }
+        if (resp.ok && result.success) {
+          // Only redirect after webhook confirms trial/subscription activation
           setPaymentSuccess(true);
           setTimeout(
             () =>
@@ -151,20 +154,23 @@ const Checkout = () => {
             2000
           );
         } else {
-          setSdkError(
-            (isTrial ? "Trial activation failed" : "Payment capture failed") +
-              ". Please contact support with reference: " +
-              orderID
-          );
+          setWebhookError({
+            code: result.code || `http_${resp.status}`,
+            message: result.error || result.message || (isTrial ? "Trial activation failed" : "Payment capture failed"),
+            orderId: orderID,
+            requestId: result.request_id,
+            httpStatus: resp.status,
+            paypalDebugId: result.paypal_debug_id,
+          });
         }
-      } catch {
-        setSdkError(
-          (isTrial
-            ? "Trial approved by PayPal but could not be activated"
-            : "Subscription approved by PayPal but could not be saved") +
-            ". Please contact support with reference: " +
-            orderID
-        );
+      } catch (e) {
+        setWebhookError({
+          code: "network_error",
+          message: (isTrial
+            ? "Trial approved by PayPal but the activation request failed to reach our server."
+            : "Subscription approved by PayPal but the confirmation request failed to reach our server."),
+          orderId: orderID,
+        });
       }
       setProcessing(false);
     },
