@@ -119,6 +119,48 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_webhook_log: {
+        Row: {
+          caller_user_id: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          order_id: string | null
+          payload: Json | null
+          paypal_event: string | null
+          request_id: string | null
+          status: string
+        }
+        Insert: {
+          caller_user_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          order_id?: string | null
+          payload?: Json | null
+          paypal_event?: string | null
+          request_id?: string | null
+          status: string
+        }
+        Update: {
+          caller_user_id?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          order_id?: string | null
+          payload?: Json | null
+          paypal_event?: string | null
+          request_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -224,6 +266,9 @@ export type Database = {
           aum_bracket: string
           contact_email: string
           created_at: string
+          email_error: string | null
+          email_message_id: string | null
+          email_sent_at: string | null
           fund_name: string
           id: string
           message: string | null
@@ -238,6 +283,9 @@ export type Database = {
           aum_bracket: string
           contact_email: string
           created_at?: string
+          email_error?: string | null
+          email_message_id?: string | null
+          email_sent_at?: string | null
           fund_name: string
           id?: string
           message?: string | null
@@ -252,6 +300,9 @@ export type Database = {
           aum_bracket?: string
           contact_email?: string
           created_at?: string
+          email_error?: string | null
+          email_message_id?: string | null
+          email_sent_at?: string | null
           fund_name?: string
           id?: string
           message?: string | null
