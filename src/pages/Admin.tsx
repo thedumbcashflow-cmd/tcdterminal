@@ -652,6 +652,10 @@ const Admin = () => {
         {activeTab === "security" && role === "admin" && (
           <SecurityTrend />
         )}
+
+        {activeTab === "sovereign" && role === "admin" && (
+          <SovereignApplications />
+        )}
       </div>
     </div>
   );
