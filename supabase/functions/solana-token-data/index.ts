@@ -10,6 +10,7 @@ const ALLOWED_ORIGINS = [
   "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:8080",
 ];
 const baseCors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -86,9 +87,10 @@ Deno.serve(async (req) => {
 
   try {
     // Parallel: mint info + largest accounts + Helius enriched txns
-    const [accountInfo, largest, txns] = await Promise.allSettled([
+    const [accountInfo, largest, tokenSupply, txns] = await Promise.allSettled([
       rpc("getAccountInfo", [address, { encoding: "jsonParsed" }]),
       rpc("getTokenLargestAccounts", [address]),
+      rpc("getTokenSupply", [address]),
       HELIUS_KEY
         ? fetch(`https://api.helius.xyz/v0/addresses/${address}/transactions?api-key=${HELIUS_KEY}&limit=25`)
             .then((r) => r.ok ? r.json() : Promise.reject(new Error(`helius ${r.status}`)))
@@ -98,8 +100,13 @@ Deno.serve(async (req) => {
     const parsed = accountInfo.status === "fulfilled"
       ? (accountInfo.value as any)?.value?.data?.parsed?.info ?? null
       : null;
-    const supply = parsed?.supply ? Number(parsed.supply) : null;
-    const decimals = parsed?.decimals ?? null;
+    const supplyInfo = tokenSupply.status === "fulfilled" ? (tokenSupply.value as any)?.value ?? null : null;
+    const supply = parsed?.supply
+      ? Number(parsed.supply)
+      : supplyInfo?.amount
+        ? Number(supplyInfo.amount)
+        : null;
+    const decimals = parsed?.decimals ?? supplyInfo?.decimals ?? null;
 
     let holders = largest.status === "fulfilled"
       ? ((largest.value as any)?.value || []).map((h: any) => ({
@@ -122,7 +129,7 @@ Deno.serve(async (req) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             jsonrpc: "2.0", id: "das", method: "getTokenAccounts",
-            params: { mint: address, limit: 20, options: { showZeroBalance: false } },
+            params: { mint: address, limit: 1000, options: { showZeroBalance: false } },
           }),
         });
         const j = await r.json();
@@ -137,7 +144,8 @@ Deno.serve(async (req) => {
               ui_amount: Number(it.amount ?? 0) / Math.pow(10, dec),
               decimals: dec,
             }))
-            .sort((a: any, b: any) => Number(b.amount) - Number(a.amount));
+            .sort((a: any, b: any) => Number(b.amount) - Number(a.amount))
+            .slice(0, 20);
           holdersSource = "helius-das";
         }
       } catch (e) {

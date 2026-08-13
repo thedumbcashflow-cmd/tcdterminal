@@ -7,6 +7,7 @@ const ALLOWED_ORIGINS = [
   "https://id-preview--19dfb6f8-6d48-4348-b424-2070a2f80361.lovableproject.com",
   "http://localhost:3000",
   "http://localhost:5173",
+  "http://localhost:8080",
 ];
 
 const baseCors = {
