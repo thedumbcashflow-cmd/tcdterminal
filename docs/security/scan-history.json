@@ -153,6 +153,17 @@
         "medium": 0,
         "low": 0
       }
+    },
+    {
+      "ts": "2026-08-13T14:12:32.831Z",
+      "commit": "a0009e608481",
+      "pr": null,
+      "status": "fail",
+      "severity": {
+        "high": 0,
+        "medium": 0,
+        "low": 0
+      }
     }
   ]
 }
