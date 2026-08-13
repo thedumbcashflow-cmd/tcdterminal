@@ -101,11 +101,12 @@ Deno.serve(async (req) => {
       ? (accountInfo.value as any)?.value?.data?.parsed?.info ?? null
       : null;
     const supplyInfo = tokenSupply.status === "fulfilled" ? (tokenSupply.value as any)?.value ?? null : null;
-    const supply = parsed?.supply
-      ? Number(parsed.supply)
-      : supplyInfo?.amount
-        ? Number(supplyInfo.amount)
-        : null;
+    // Prefer getTokenSupply (authoritative); some RPC nodes report "0" for
+    // getAccountInfo on wrapped/native mints, which would zero out market cap.
+    const supplyCandidates = [supplyInfo?.amount, parsed?.supply]
+      .map((v) => (v == null ? null : Number(v)))
+      .filter((v) => v != null && Number.isFinite(v) && v > 0) as number[];
+    const supply = supplyCandidates.length ? supplyCandidates[0] : null;
     const decimals = parsed?.decimals ?? supplyInfo?.decimals ?? null;
 
     let holders = largest.status === "fulfilled"
