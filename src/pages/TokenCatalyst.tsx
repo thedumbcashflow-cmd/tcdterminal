@@ -20,13 +20,14 @@ const PRESETS: { sym: string; name: string; address: string }[] = [
 ];
 
 const fmtUsd = (n: number | null | undefined) => {
-  if (n == null || isNaN(n)) return "—";
+  if (n == null || isNaN(n) || n === 0) return "—";
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
   if (n >= 1e3) return `$${(n / 1e3).toFixed(2)}K`;
   if (n >= 1) return `$${n.toFixed(2)}`;
   return `$${n.toPrecision(3)}`;
 };
+
 const fmtNum = (n: number | null | undefined, d = 0) => {
   if (n == null || isNaN(n)) return "—";
   return n.toLocaleString(undefined, { maximumFractionDigits: d });

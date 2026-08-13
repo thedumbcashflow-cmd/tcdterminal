@@ -105,12 +105,18 @@ export function useTokenCatalyst(address: string) {
     // ── On-chain via edge function: mint auths + holders + transfers + defi ──
     if (chainRes.status === "fulfilled") {
       const c = chainRes.value;
+      const decimals = c.mint?.decimals ?? 0;
+      const uiSupply = c.mint?.supply != null ? c.mint.supply / Math.pow(10, decimals) : null;
+      const priceNow = dexMeta.price ?? null;
+      const derivedCap =
+        dexMeta.market_cap ?? (uiSupply != null && priceNow != null ? uiSupply * priceNow : null);
       setMeta({
         data: {
           address,
           ...dexMeta,
+          market_cap: derivedCap,
           supply: c.mint.supply,
-          decimals: c.mint.decimals ?? 0,
+          decimals,
           holder: c.holders?.length ?? null,
           mint_authority: c.mint.mintAuthority,
           freeze_authority: c.mint.freezeAuthority,
@@ -118,6 +124,7 @@ export function useTokenCatalyst(address: string) {
         loading: false, error: primary ? null : "No DEX pair found",
         tierLocked: false,
       });
+
       setHolders({ data: c.holders, loading: false, error: null, tierLocked: false });
       setHoldersDiag({
         source: c.holdersSource || (c.holders?.length ? "largestAccounts" : "none"),

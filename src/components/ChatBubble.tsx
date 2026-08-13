@@ -183,8 +183,57 @@ const ChatBubble = () => {
       if (ctrlRef.current === ctrl) ctrlRef.current = null;
     }
   }
+  // Fallback: built-in terminal AI (Lovable AI Gateway) when the external agent
+  // backend/tunnel is unreachable. Streams SSE from the `chat` edge function.
+  async function fallbackChat(text: string): Promise<boolean> {
+    const ctrl = new AbortController();
+    ctrlRef.current = ctrl;
+    const timeoutId = setTimeout(() => ctrl.abort("timeout"), CLIENT_TIMEOUT_MS);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const bearer = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`, {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify({ messages: [{ role: "user", content: text }] }),
+      });
+      if (!resp.ok || !resp.body) return false;
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let soFar = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, idx); buffer = buffer.slice(idx + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let chunk = "";
+          try { chunk = extractDelta(JSON.parse(payload)); } catch { chunk = payload; }
+          if (chunk) { soFar += chunk; updateLastAssistant(soFar); }
+        }
+      }
+      return soFar.length > 0;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+      if (ctrlRef.current === ctrl) ctrlRef.current = null;
+    }
+  }
 
   const send = async () => {
+
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
@@ -216,13 +265,20 @@ const ChatBubble = () => {
         // strip the reconnect marker before next attempt
         updateLastAssistant(partial);
       } else {
+        // Agent backend unreachable — fall back to the built-in terminal AI.
+        if (!partial) {
+          updateLastAssistant("");
+          const ok = await fallbackChat(text);
+          if (ok) break;
+        }
         const tail = lastReason === "timeout" ? "timed out" : "connection dropped";
         const suffix = partial
           ? `\n\n[stream ${tail} after partial response — req ${lastReqId || "—"}]`
-          : `Stream ${tail}. Please retry. [req ${lastReqId || "—"}]`;
+          : `Agent backend unavailable and fallback AI failed. Please retry. [req ${lastReqId || "—"}]`;
         if (partial) updateLastAssistant(partial + suffix);
         else appendAssistant(suffix, "error");
       }
+
     }
 
     setLoading(false);
