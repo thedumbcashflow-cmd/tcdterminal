@@ -107,20 +107,37 @@ const Checkout = () => {
   const buttonsRendered = useRef(false);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/auth");
+    if (!authLoading && !user) {
+      const next = `${location.pathname}${location.search}`;
+      navigate(`/auth?next=${encodeURIComponent(next)}`, { replace: true });
+    }
   }, [user, authLoading, navigate]);
 
-  // Phase 1: Load SDK
+  // Phase 1: Load SDK for the intent this plan needs
   useEffect(() => {
     if (!isValid) return;
     if (!PAYPAL_CLIENT_ID) {
       setSdkError("Payment provider is not configured (missing client ID). Please contact support.");
       return;
     }
-    loadPayPalSdk(PAYPAL_CLIENT_ID)
-      .then(() => setSdkReady(true))
-      .catch(() => setSdkError("Failed to load PayPal SDK. Please refresh."));
-  }, [isValid]);
+    let active = true;
+    setSdkReady(false);
+    buttonsRendered.current = false;
+    loadPayPalSdk(PAYPAL_CLIENT_ID, plan === "trial" ? "authorize" : "capture")
+      .then(() => { if (active) setSdkReady(true); })
+      .catch(() => { if (active) setSdkError("Failed to load PayPal SDK. Please refresh."); });
+    return () => { active = false; };
+  }, [isValid, plan]);
+
+  // Clear the PayPal button container on unmount so navigating away and back
+  // never leaves a stale/duplicate button behind.
+  useEffect(() => {
+    const node = containerRef.current;
+    return () => {
+      if (node) node.innerHTML = "";
+      buttonsRendered.current = false;
+    };
+  }, []);
 
   const handleApproval = useCallback(
     async (orderID: string) => {
