@@ -192,7 +192,7 @@ const Pricing = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate(user ? "/checkout?plan=trial&period=monthly" : "/auth?next=/checkout?plan=trial&period=monthly")}
+            onClick={() => navigate(user ? "/checkout?plan=trial&period=monthly" : `/auth?next=${encodeURIComponent("/checkout?plan=trial&period=monthly")}`)}
             className="bg-green-500 text-black hover:bg-green-400 font-mono text-sm px-5 py-2 rounded-md whitespace-nowrap transition-colors"
           >
             Start 7-Day Trial →

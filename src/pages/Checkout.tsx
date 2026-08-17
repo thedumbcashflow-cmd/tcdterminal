@@ -30,23 +30,29 @@ declare global {
   }
 }
 
-function loadPayPalSdk(clientId: string): Promise<void> {
+// The SDK must be (re)loaded per intent: a trial uses `authorize` ($1 hold),
+// every paid plan uses `capture`. Reusing an SDK loaded with the other intent
+// silently breaks the order flow, so we tear it down when the intent changes.
+let loadedIntent: "authorize" | "capture" | null = null;
+
+function loadPayPalSdk(clientId: string, intent: "authorize" | "capture"): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (window.paypal) {
-      resolve();
-      return;
-    }
     const existing = document.querySelector("script[data-paypal-sdk]");
-    if (existing) {
+    if (existing && loadedIntent === intent) {
+      if (window.paypal) { resolve(); return; }
       existing.addEventListener("load", () => resolve());
       existing.addEventListener("error", () => reject(new Error("PayPal SDK failed")));
       return;
     }
+    if (existing) {
+      existing.remove();
+      delete window.paypal;
+    }
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${window.location.search.includes("plan=trial") ? "authorize" : "capture"}`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${intent}`;
     script.async = true;
     script.setAttribute("data-paypal-sdk", "true");
-    script.onload = () => resolve();
+    script.onload = () => { loadedIntent = intent; resolve(); };
     script.onerror = () => reject(new Error("PayPal SDK failed to load"));
     document.head.appendChild(script);
   });
@@ -101,20 +107,37 @@ const Checkout = () => {
   const buttonsRendered = useRef(false);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/auth");
+    if (!authLoading && !user) {
+      const next = `${location.pathname}${location.search}`;
+      navigate(`/auth?next=${encodeURIComponent(next)}`, { replace: true });
+    }
   }, [user, authLoading, navigate]);
 
-  // Phase 1: Load SDK
+  // Phase 1: Load SDK for the intent this plan needs
   useEffect(() => {
     if (!isValid) return;
     if (!PAYPAL_CLIENT_ID) {
       setSdkError("Payment provider is not configured (missing client ID). Please contact support.");
       return;
     }
-    loadPayPalSdk(PAYPAL_CLIENT_ID)
-      .then(() => setSdkReady(true))
-      .catch(() => setSdkError("Failed to load PayPal SDK. Please refresh."));
-  }, [isValid]);
+    let active = true;
+    setSdkReady(false);
+    buttonsRendered.current = false;
+    loadPayPalSdk(PAYPAL_CLIENT_ID, plan === "trial" ? "authorize" : "capture")
+      .then(() => { if (active) setSdkReady(true); })
+      .catch(() => { if (active) setSdkError("Failed to load PayPal SDK. Please refresh."); });
+    return () => { active = false; };
+  }, [isValid, plan]);
+
+  // Clear the PayPal button container on unmount so navigating away and back
+  // never leaves a stale/duplicate button behind.
+  useEffect(() => {
+    const node = containerRef.current;
+    return () => {
+      if (node) node.innerHTML = "";
+      buttonsRendered.current = false;
+    };
+  }, []);
 
   const handleApproval = useCallback(
     async (orderID: string) => {

@@ -288,6 +288,7 @@ serve(async (req) => {
 
       const { error: profErr } = await supabaseAdmin.from("profiles").update({
         subscription_tier: "pro",
+        trial_started_at: new Date().toISOString(),
         trial_ends_at: trialEnds.toISOString(),
       }).eq("id", userId);
       if (profErr) {
@@ -417,9 +418,23 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
 
-      await supabaseAdmin.from("profiles").update({
+      // Converting to a paid plan ends any trial state.
+      const { error: paidProfErr } = await supabaseAdmin.from("profiles").update({
         subscription_tier: plan,
+        subscription_period: period,
+        subscribed_at: new Date().toISOString(),
+        trial_ends_at: null,
       }).eq("id", userId);
+      if (paidProfErr) {
+        void auditLog({
+          order_id, paypal_event: "paypal.capture", status: "error", http_status: 500,
+          error_code: "profile_update_failed", error_message: paidProfErr.message,
+        });
+        return new Response(JSON.stringify({
+          error: "Payment captured but the account could not be upgraded. Contact support with your order ID.",
+          code: "profile_update_failed",
+        }), { status: 500, headers: { ...cors.headers, "Content-Type": "application/json" } });
+      }
 
       const months = PERIOD_MONTHS[period] || 1;
       const periodEnd = new Date();
