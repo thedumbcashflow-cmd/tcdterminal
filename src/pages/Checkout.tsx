@@ -30,23 +30,29 @@ declare global {
   }
 }
 
-function loadPayPalSdk(clientId: string): Promise<void> {
+// The SDK must be (re)loaded per intent: a trial uses `authorize` ($1 hold),
+// every paid plan uses `capture`. Reusing an SDK loaded with the other intent
+// silently breaks the order flow, so we tear it down when the intent changes.
+let loadedIntent: "authorize" | "capture" | null = null;
+
+function loadPayPalSdk(clientId: string, intent: "authorize" | "capture"): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (window.paypal) {
-      resolve();
-      return;
-    }
     const existing = document.querySelector("script[data-paypal-sdk]");
-    if (existing) {
+    if (existing && loadedIntent === intent) {
+      if (window.paypal) { resolve(); return; }
       existing.addEventListener("load", () => resolve());
       existing.addEventListener("error", () => reject(new Error("PayPal SDK failed")));
       return;
     }
+    if (existing) {
+      existing.remove();
+      delete window.paypal;
+    }
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${window.location.search.includes("plan=trial") ? "authorize" : "capture"}`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=${intent}`;
     script.async = true;
     script.setAttribute("data-paypal-sdk", "true");
-    script.onload = () => resolve();
+    script.onload = () => { loadedIntent = intent; resolve(); };
     script.onerror = () => reject(new Error("PayPal SDK failed to load"));
     document.head.appendChild(script);
   });
