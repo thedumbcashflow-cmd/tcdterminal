@@ -167,9 +167,12 @@ export type Database = {
           created_at: string
           display_name: string | null
           id: string
+          subscribed_at: string | null
+          subscription_period: string | null
           subscription_tier: Database["public"]["Enums"]["subscription_tier"]
           timezone: string | null
           trial_ends_at: string | null
+          trial_started_at: string | null
           updated_at: string
           username: string | null
         }
@@ -178,9 +181,12 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
+          subscribed_at?: string | null
+          subscription_period?: string | null
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           timezone?: string | null
           trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           username?: string | null
         }
@@ -189,9 +195,12 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          subscribed_at?: string | null
+          subscription_period?: string | null
           subscription_tier?: Database["public"]["Enums"]["subscription_tier"]
           timezone?: string | null
           trial_ends_at?: string | null
+          trial_started_at?: string | null
           updated_at?: string
           username?: string | null
         }
