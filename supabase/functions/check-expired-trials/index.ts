@@ -80,14 +80,31 @@ Deno.serve(async (req) => {
 
     let updated = 0;
     if (expiredUsers && expiredUsers.length > 0) {
-      const ids = expiredUsers.map((u: any) => u.id);
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ subscription_tier: "free", trial_ends_at: null })
-        .in("id", ids);
+      const candidateIds = expiredUsers.map((u: any) => u.id);
 
-      if (updateError) throw updateError;
-      updated = ids.length;
+      // Never downgrade someone who converted to a paid plan: a paid capture
+      // leaves the old trial_ends_at behind on legacy rows.
+      const { data: paid, error: paidError } = await supabase
+        .from("subscriptions")
+        .select("user_id")
+        .eq("status", "active")
+        .in("user_id", candidateIds);
+      if (paidError) throw paidError;
+
+      const paidIds = new Set((paid ?? []).map((s: any) => s.user_id));
+      const ids = candidateIds.filter((id: string) => !paidIds.has(id));
+
+      if (ids.length > 0) {
+        // trial_ends_at is intentionally preserved so the expired-trial UI
+        // (AuthGuard overlay / pricing banner) can still detect the lapse.
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ subscription_tier: "free" })
+          .in("id", ids);
+
+        if (updateError) throw updateError;
+        updated = ids.length;
+      }
     }
 
     return new Response(
